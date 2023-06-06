@@ -1,0 +1,146 @@
+#!/bin/bash
+#
+##
+# Author: Yogesh Sharma
+# Copyright Yogesh Sharma
+##
+#
+1
+if [ "$0" = "$BASH_SOURCE" ]; then
+  echo "source $0"
+  exit 1
+fi
+if [ -z $SAVED_PATH ]; then
+  SAVED_PATH=${PATH}
+fi
+if [ -z $SAVED_PS1 ]; then
+  SAVED_PS1=${PS1}
+fi
+if [ "$0" = "$BASH_SOURCE" ] && [ ! "$1" = "" ]; then
+  PGV=${1}
+fi
+if [ -z "PGV" ]; then
+  echo "Missing PGV, export PGV=HEAD or export PGV=15"
+else
+  if [ -z $PG_SRC ]; then
+    PG_SRC=${HOME}/gitwork/${PG_PREFIX}pg-${PGV}-src
+  fi
+  PG_BASE=${HOME}/gitwork/${PG_PREFIX}pg-${PGV}-inst
+  if [ ! -d ${PG_SRC} ] || [ ! -d ${HOME}/gitwork/${PG_PREFIX}pg-${PGV}-inst ]; then
+    echo "Missing source worktree/clone in ${PG_SRC} or ${PG_BASE}"
+    echo "git worktree add --track -b <local branch> ../<local dir> origin/<Branch/TAG>\ngit clone ...\n\n"
+    echo "git worktree add --track -b ${PG_PREFIX}REL_${PGV}_STABLE ../${PG_PREFIX}pg-${PGV}-src origin/${PG_PREFIX}REL_${PGV}_STABLE"
+    echo "mkdir -p ${PG_BASE}"
+  else
+
+    export PS1=$'\n'"ENV: ${PG_PREFIX}pg-${PGV}"$'\n'"[ %n@%m %C ] % "
+    export PG_SRC
+    export PG_BASE
+    export PG_BIN=${PG_BASE}/bin
+    export PGDATA=${PG_BASE}/data
+    export PGDATABASE=postgres
+    export LD_LIBRARY_PATH=${PG_BASE}/lib
+    export PATH=${PG_BIN}:${SAVED_PATH}
+    if [[ "$PGV" = <-> ]]; then
+      export PGPORT=54${PGV}
+    else
+      export PGPORT=5432
+    fi
+fi
+
+compile() {
+  pushd ${PG_SRC}
+  ./configure --prefix=${PG_BASE} --enable-debug --with-pgport=${PGPORT} --with-lz4 --with-ssl=openssl --with-python --with-perl --enable-debug --enable-cassert --enable-tap-tests CFLAGS="-ggdb -O0 -g3 -ggdb3 -fno-omit-frame-pointer"
+  if [ $? -gt 0 ]; then
+    echo "Configure failed"
+  else
+    make install
+    if [ $? -gt 0 ]; then
+      echo "make install failed"
+    fi
+  fi
+  popd
+}
+
+compile_contrib() {
+  pushd ${PG_SRC}/contrib
+  make install
+  if [ $? -gt 0 ]; then
+    echo "make install failed"
+  fi
+  popd
+}
+
+startdb(){
+  pg_ctl stop
+}
+stopdb(){
+  pg_ctl stop
+}
+restartdb(){
+  stopdb
+  startdb
+}
+
+rmdb(){
+  rm -rf $PGDATA/*
+}
+setupdb(){
+  initdb --data-checksums --username=sharyogi
+  echo "include = '../../pg${PGV}.conf'" >> $PGDATA/postgresql.conf
+}
+resetdb() {
+  stopdb
+  rmdb
+  setupdb
+  startdb
+}
+
+resetdbN() {
+  if [ -z $1 ]; then
+    echo "resetdbN <node number>"
+  else
+    NodeN=$1
+    pg_ctl stop -D ${PGDATA}-${NodeN}
+    rm -rf ${PGDATA}-${NodeN}/*
+    initdb --data-checksums --username=sharyogi -D ${PGDATA}-${NodeN}
+    echo "include = '../../pg${PGV}-${NodeN}.conf'" >> ${PGDATA}-${NodeN}/postgresql.conf
+    pg_ctl start -D ${PGDATA}-${NodeN}
+  fi
+}
+
+resetall() {
+  pg_ctl stop
+  rm -rf $PG_BASE/*
+  pushd ${PG_SRC}
+  make clean
+  popd
+  compile
+  resetdb
+}
+
+deactivate() {
+  export PATH=${SAVED_PATH}
+  export PS1=${SAVED_PS1}
+
+  unset PG_SRC
+  unset PG_BASE
+  unset PG_BIN
+  unset LD_LIBRARY_PATH
+  unset PGDATA
+  unset PGDATABASE
+  unset SAVED_PATH
+  unset SAVED_PS1
+  unset -f compile
+  unset -f compile_contrib
+  unset -f startdb
+  unset -f stopdb
+  unset -f restartdb
+  unset -f rmdb
+  unset -f setupdb
+  unset -f resetdb
+  unset -f resetdbN
+  unset -f resetall
+  unset -f deactivate
+}
+fi

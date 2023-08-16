@@ -2,12 +2,9 @@
 #
 ##
 # Author: Yogesh Sharma
-# Copyright Yogesh Sharma
+# Copyright 2018-2024 Yogesh Sharma
 ##
 #
-echo "\$0 is $0"
-echo "\$1 is $1"
-echo "\$BASH_SOURCE is $BASH_SOURCE"
 if [ "$0" = "$BASH_SOURCE" ]; then
   echo "source $0"
   exit 1
@@ -18,7 +15,7 @@ else
 PG_REPO_DIR=${HOME}/gitwork
 PG_REPO_NAME=postgresql
 DEV_REPO_DIR=${PG_REPO_DIR}
-SRC_DIR="${SRC_DIR}"
+SRC_DIR="pg-${PGV}-src"
 INST_DIR="pg-${PGV}-inst"
 fi
 

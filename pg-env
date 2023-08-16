@@ -5,11 +5,23 @@
 # Copyright Yogesh Sharma
 ##
 #
-1
+echo "\$0 is $0"
+echo "\$1 is $1"
+echo "\$BASH_SOURCE is $BASH_SOURCE"
 if [ "$0" = "$BASH_SOURCE" ]; then
   echo "source $0"
   exit 1
 fi
+if [[ -f ~/.pg-env ]]; then
+  source ~/.pg-env
+else
+PG_REPO_DIR=${HOME}/gitwork
+PG_REPO_NAME=postgresql
+DEV_REPO_DIR=${PG_REPO_DIR}
+SRC_DIR="${SRC_DIR}"
+INST_DIR="pg-${PGV}-inst"
+fi
+
 if [ -z $SAVED_PATH ]; then
   SAVED_PATH=${PATH}
 fi
@@ -23,13 +35,13 @@ if [ -z "PGV" ]; then
   echo "Missing PGV, export PGV=HEAD or export PGV=15"
 else
   if [ -z $PG_SRC ]; then
-    PG_SRC=${HOME}/gitwork/${PG_PREFIX}pg-${PGV}-src
+    PG_SRC=${PG_REPO_DIR}/${PG_PREFIX}${SRC_DIR}
   fi
-  PG_BASE=${HOME}/gitwork/${PG_PREFIX}pg-${PGV}-inst
-  if [ ! -d ${PG_SRC} ] || [ ! -d ${HOME}/gitwork/${PG_PREFIX}pg-${PGV}-inst ]; then
+  PG_BASE=${PG_REPO_DIR}/${PG_PREFIX}${INST_DIR}
+  if [ ! -d ${PG_SRC} ] || [ ! -d ${PG_REPO_DIR}/${PG_PREFIX}${INST_DIR} ]; then
     echo "Missing source worktree/clone in ${PG_SRC} or ${PG_BASE}"
     echo "git worktree add --track -b <local branch> ../<local dir> origin/<Branch/TAG>\ngit clone ...\n\n"
-    echo "git worktree add --track -b ${PG_PREFIX}REL_${PGV}_STABLE ../${PG_PREFIX}pg-${PGV}-src origin/${PG_PREFIX}REL_${PGV}_STABLE"
+    echo "git worktree add --track -b ${PG_PREFIX}REL_${PGV}_STABLE ../${PG_PREFIX}${SRC_DIR} origin/${PG_PREFIX}REL_${PGV}_STABLE"
     echo "mkdir -p ${PG_BASE}"
   else
 
@@ -41,12 +53,18 @@ else
     export PGDATABASE=postgres
     export LD_LIBRARY_PATH=${PG_BASE}/lib
     export PATH=${PG_BIN}:${SAVED_PATH}
-    if [[ "$PGV" = <-> ]]; then
+    if [[ "$PGV" =~ '^[0-9]+$' ]]; then
       export PGPORT=54${PGV}
     else
       export PGPORT=5432
     fi
 fi
+
+distclean() {
+  pushd ${PG_SRC}
+  make distclean
+  popd
+}
 
 compile() {
   pushd ${PG_SRC}
@@ -72,51 +90,67 @@ compile_contrib() {
 }
 
 startdb(){
-  pg_ctl stop
+  if [ -z $1 ]; then
+    pg_ctl start
+  else
+    for NodeN in "$@"
+    do
+      pg_ctl start -D ${PGDATA}-${NodeN}
+    done
+  fi
 }
 stopdb(){
-  pg_ctl stop
-}
-restartdb(){
-  stopdb
-  startdb
-}
-
-rmdb(){
-  rm -rf $PGDATA/*
-}
-setupdb(){
-  initdb --data-checksums --username=sharyogi
-  echo "include = '../../pg${PGV}.conf'" >> $PGDATA/postgresql.conf
-}
-resetdb() {
-  stopdb
-  rmdb
-  setupdb
-  startdb
-}
-
-resetdbN() {
   if [ -z $1 ]; then
-    echo "resetdbN <node number>"
+  pg_ctl stop
   else
-    NodeN=$1
-    pg_ctl stop -D ${PGDATA}-${NodeN}
-    rm -rf ${PGDATA}-${NodeN}/*
-    initdb --data-checksums --username=sharyogi -D ${PGDATA}-${NodeN}
-    echo "include = '../../pg${PGV}-${NodeN}.conf'" >> ${PGDATA}-${NodeN}/postgresql.conf
-    pg_ctl start -D ${PGDATA}-${NodeN}
+    for NodeN in "$@"
+    do
+      pg_ctl stop -D ${PGDATA}-${NodeN}
+    done
   fi
 }
 
+restartdb(){
+  stopdb "$@"
+  startdb "$@"
+}
+
+cleandb(){
+  if [ -z $1 ]; then
+    rm -rf $PGDATA/*
+  else
+    for NodeN in "$@"
+    do
+      rm -rf ${PGDATA}-${NodeN}/*
+    done
+  fi
+}
+setupdb(){
+  if [ -z $1 ]; then
+    initdb --data-checksums --username=sharyogi
+  else
+    for NodeN in "$@"
+    do
+      initdb --data-checksums --username=sharyogi -D ${PGDATA}-${NodeN}
+      echo "include = '../../pg${PGV}-${NodeN}.conf'" >> ${PGDATA}-${NodeN}/postgresql.conf
+    done
+  fi
+}
+
+resetdb() {
+  stopdb "$@"
+  cleandb "$@"
+  setupdb "$@"
+  startdb "$@"
+}
+
 resetall() {
-  pg_ctl stop
+  stopdb "$@"
   rm -rf $PG_BASE/*
-  pushd ${PG_SRC}
-  make clean
-  popd
+  distclean
   compile
-  resetdb
+  compile_contrib
+  resetdb "$@"
 }
 
 deactivate() {
@@ -131,15 +165,15 @@ deactivate() {
   unset PGDATABASE
   unset SAVED_PATH
   unset SAVED_PS1
+  unset -f distclean
   unset -f compile
   unset -f compile_contrib
   unset -f startdb
   unset -f stopdb
   unset -f restartdb
-  unset -f rmdb
+  unset -f cleandb
   unset -f setupdb
   unset -f resetdb
-  unset -f resetdbN
   unset -f resetall
   unset -f deactivate
 }

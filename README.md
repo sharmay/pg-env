@@ -7,6 +7,9 @@ export PGV=<major version|HEAD>
 ## Activate PostgreSQL Developmnent ENvironment
 `source pg-env`
 
+## Run distclean on PostgreSQL source
+`distclean`
+
 ## Compile PostgreSQL source and install
 `compile`
 
@@ -14,29 +17,48 @@ export PGV=<major version|HEAD>
 `compile_contrib`
 
 ## Start PostgreSQL
-`startdb`
+`startdb <Nodes>`
+ex:
+  startdb
+  startdb 1 2 3
 
 ## Stop PostgtreSQL
-`stopdb`
+`stopdb <Nodes>`
+ex:
+  stopdb
+  stopdb 1 2 3
 
 ## Restart PostgreSQL
-`restartdb`
+`restartdb <Nodes>`
+ex:
+  restartdb
+  restartdb 1 2 3
 
 ## Remove PGDATA
-`rmdb`
+`cleandb <Nodes>`
+ex:
+  cleandb
+  cleandb 1 2 3
 
 ## Initialize PostgreSQL Cluster and include custom config
-`setupdb`
+`setupdb <Nodes>`
+ex:
+  setupdb
+  setupdb 1 2 3
 
 ## Reset DB
-`resetdb`
-
-## Reset and Setup Node N
-`resetdbN`
+`resetdb <Nodes>`
+ex:
+  resetdb
+  resetdb 1 2 3
 
 ## Reset database and install direcotory
-`resetall`
+`resetall <Nodes>`
+ex:
+  resetall
+  resetall 1 2 3
 
 ## deactivate the environment
 `deactivate`
+Exit from pg-env
 

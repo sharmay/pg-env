@@ -18,7 +18,7 @@ if [[ -f .pg-env ]]; then
   source .pg-env
 fi
 
-if [ -z " $PG_REPO_DIR" ]; then
+if [ -z "$PG_REPO_DIR" ]; then
   PG_REPO_DIR=${HOME}/gitwork
 fi
 if [ -z "$PG_REPO_NAME" ]; then

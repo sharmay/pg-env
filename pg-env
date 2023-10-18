@@ -10,29 +10,52 @@ if [ "$0" = "$BASH_SOURCE" ]; then
   exit 1
 fi
 if [[ -f ~/.pg-env ]]; then
+  echo "Loading ~/.pg-env"
   source ~/.pg-env
-else
-PG_REPO_DIR=${HOME}/gitwork
-PG_REPO_NAME=postgresql
-DEV_REPO_DIR=${PG_REPO_DIR}
-SRC_DIR="pg-${PGV}-src"
-INST_DIR="pg-${PGV}-inst"
+fi
+if [[ -f .pg-env ]]; then
+  echo "Loading .pg-env"
+  source .pg-env
 fi
 
-if [ -z $SAVED_PATH ]; then
+if [ -z " $PG_REPO_DIR" ]; then
+  PG_REPO_DIR=${HOME}/gitwork
+fi
+if [ -z "$PG_REPO_NAME" ]; then
+  PG_REPO_NAME=postgresql
+fi
+if [ -z "$DEV_REPO_DIR" ]; then
+  DEV_REPO_DIR=${PG_REPO_DIR}
+fi
+if [ -z "$SRC_DIR" ]; then
+  SRC_DIR="pg-${PGV}-src"
+fi
+if [ -z "$INST_DIR" ]; then
+  INST_DIR="pg-${PGV}-inst"
+fi
+#echo "PG_REPO_DIR $PG_REPO_DIR"
+#echo "PG_REPO_NAME $PG_REPO_NAME"
+#echo "DEV_REPO_DIR $DEV_REPO_DIR"
+#echo "SRC_DIR $SRC_DIR"
+#echo "INST_DIR $INST_DIR"
+
+if [ -z "$SAVED_PATH" ]; then
   SAVED_PATH=${PATH}
 fi
-if [ -z $SAVED_PS1 ]; then
+if [ -z "$SAVED_PS1" ]; then
   SAVED_PS1=${PS1}
 fi
 if [ "$0" = "$BASH_SOURCE" ] && [ ! "$1" = "" ]; then
   PGV=${1}
 fi
-if [ -z "PGV" ]; then
+if [ -z "$PGV" ]; then
   echo "Missing PGV, export PGV=HEAD or export PGV=15"
 else
   if [ -z $PG_SRC ]; then
     PG_SRC=${PG_REPO_DIR}/${PG_PREFIX}${SRC_DIR}
+    echo "setting PG_SRC $PG_SRC"
+  else
+    echo "Has PG_SRC $PG_SRC"
   fi
   PG_BASE=${PG_REPO_DIR}/${PG_PREFIX}${INST_DIR}
   if [ ! -d ${PG_SRC} ] || [ ! -d ${PG_REPO_DIR}/${PG_PREFIX}${INST_DIR} ]; then
@@ -42,7 +65,7 @@ else
     echo "mkdir -p ${PG_BASE}"
   else
 
-    export PS1=$'\n'"ENV: ${PG_PREFIX}pg-${PGV}"$'\n'"[ %n@%m %C ] % "
+    export PS1=$'\n'"ENV: ${PG_SRC}"$'\n'"[ %n@%m %C ] % "
     export PG_SRC
     export PG_BASE
     export PG_BIN=${PG_BASE}/bin
@@ -87,7 +110,7 @@ compile_contrib() {
 }
 
 startdb(){
-  if [ -z $1 ]; then
+  if [ -z "$1" ]; then
     pg_ctl start
   else
     for NodeN in "$@"
@@ -97,7 +120,7 @@ startdb(){
   fi
 }
 stopdb(){
-  if [ -z $1 ]; then
+  if [ -z "$1" ]; then
   pg_ctl stop
   else
     for NodeN in "$@"
@@ -113,17 +136,19 @@ restartdb(){
 }
 
 cleandb(){
-  if [ -z $1 ]; then
+  if [ -z "$1" ]; then
+    setopt localoptions rmstarsilent
     rm -rf $PGDATA/*
   else
     for NodeN in "$@"
     do
+    setopt localoptions rmstarsilent
       rm -rf ${PGDATA}-${NodeN}/*
     done
   fi
 }
 setupdb(){
-  if [ -z $1 ]; then
+  if [ -z "$1" ]; then
     initdb --data-checksums --username=sharyogi
   else
     for NodeN in "$@"
@@ -143,6 +168,7 @@ resetdb() {
 
 resetall() {
   stopdb "$@"
+  setopt localoptions rmstarsilent
   rm -rf $PG_BASE/*
   distclean
   compile
@@ -175,3 +201,4 @@ deactivate() {
   unset -f deactivate
 }
 fi
+

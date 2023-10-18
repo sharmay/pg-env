@@ -51,11 +51,8 @@ fi
 if [ -z "$PGV" ]; then
   echo "Missing PGV, export PGV=HEAD or export PGV=15"
 else
-  if [ -z $PG_SRC ]; then
+  if [ -z "$PG_SRC" ]; then
     PG_SRC=${PG_REPO_DIR}/${PG_PREFIX}${SRC_DIR}
-    echo "setting PG_SRC $PG_SRC"
-  else
-    echo "Has PG_SRC $PG_SRC"
   fi
   PG_BASE=${PG_REPO_DIR}/${PG_PREFIX}${INST_DIR}
   if [ ! -d ${PG_SRC} ] || [ ! -d ${PG_REPO_DIR}/${PG_PREFIX}${INST_DIR} ]; then

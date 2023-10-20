@@ -1,6 +1,18 @@
 # PostgreSQL development environment management script
 
+## Configuration settings
+
+| Config | Defaults | Description |
+| PGV | None | PostgreSQL Major Version or HEAD |
+| GIT_DIR | ${HOME}/gitwork | Your GIT workspace directory name |
+| PG_DEV_NAME | postgresql-<PGV> | Name of the source code folder (a git worktree) |
+| PG_INST_NAME | <PG_DEV_NAME>-INST | Name of the install folder |
+
 ## Setting up environment
+
+You can create ~/.pg-env with your global settings
+
+You can create ./.pg-env with your per folder settings
 
 export PGV=<major version|HEAD>
 

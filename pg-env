@@ -4,40 +4,38 @@
 # Author: Yogesh Sharma
 # Copyright 2018-2024 Yogesh Sharma
 ##
+
 #
+# GIT_DIR = Git Folder
+# PG_DEV_NAME
+# PG_INST_NAME
+#
+
 if [ "$0" = "$BASH_SOURCE" ]; then
   echo "source $0"
   exit 1
 fi
 if [[ -f ~/.pg-env ]]; then
-  echo "Loading ~/.pg-env"
+  [ ! -z "$PG_ENV_DEBUG" ] && echo "Loading ~/.pg-env"
   source ~/.pg-env
 fi
 if [[ -f .pg-env ]]; then
-  echo "Loading .pg-env"
+  [ ! -z "$PG_ENV_DEBUG" ] && echo "Loading .pg-env"
   source .pg-env
 fi
 
-if [ -z "$PG_REPO_DIR" ]; then
-  PG_REPO_DIR=${HOME}/gitwork
+if [ -z "$GIT_DIR" ]; then
+  GIT_DIR=${HOME}/gitwork
 fi
-if [ -z "$PG_REPO_NAME" ]; then
-  PG_REPO_NAME=postgresql
+if [ -z "$PG_DEV_NAME" ]; then
+  PG_DEV_NAME="postgresql-${PGV}"
 fi
-if [ -z "$DEV_REPO_DIR" ]; then
-  DEV_REPO_DIR=${PG_REPO_DIR}
+if [ -z "$PG_INST_NAME" ]; then
+  PG_INST_NAME="${PG_DEV_NAME}-INST"
 fi
-if [ -z "$SRC_DIR" ]; then
-  SRC_DIR="pg-${PGV}-src"
-fi
-if [ -z "$INST_DIR" ]; then
-  INST_DIR="pg-${PGV}-inst"
-fi
-#echo "PG_REPO_DIR $PG_REPO_DIR"
-#echo "PG_REPO_NAME $PG_REPO_NAME"
-#echo "DEV_REPO_DIR $DEV_REPO_DIR"
-#echo "SRC_DIR $SRC_DIR"
-#echo "INST_DIR $INST_DIR"
+[ ! -z "$PG_ENV_DEBUG" ] && echo "GIT_DIR $GIT_DIR"
+[ ! -z "$PG_ENV_DEBUG" ] && echo "PG_DEV_NAME $PG_DEV_NAME"
+[ ! -z "$PG_ENV_DEBUG" ] && echo "PG_INST_NAME $PG_INST_NAME"
 
 if [ -z "$SAVED_PATH" ]; then
   SAVED_PATH=${PATH}
@@ -45,30 +43,36 @@ fi
 if [ -z "$SAVED_PS1" ]; then
   SAVED_PS1=${PS1}
 fi
+if [ -z "$SAVED_VIRTUAL_ENV" ]; then
+  SAVED_VIRTUAL_ENV=${VIRTUAL_ENV}
+fi
 if [ "$0" = "$BASH_SOURCE" ] && [ ! "$1" = "" ]; then
   PGV=${1}
 fi
 if [ -z "$PGV" ]; then
   echo "Missing PGV, export PGV=HEAD or export PGV=15"
 else
-  if [ -z "$PG_SRC" ]; then
-    PG_SRC=${PG_REPO_DIR}/${PG_PREFIX}${SRC_DIR}
-  fi
-  PG_BASE=${PG_REPO_DIR}/${PG_PREFIX}${INST_DIR}
-  if [ ! -d ${PG_SRC} ] || [ ! -d ${PG_REPO_DIR}/${PG_PREFIX}${INST_DIR} ]; then
-    echo "Missing source worktree/clone in ${PG_SRC} or ${PG_BASE}"
+  PG_DEV_SRC=${GIT_DIR}/${PG_DEV_NAME}
+  PG_DEV_INST=${GIT_DIR}/${PG_INST_NAME}
+  if [ ! -d ${PG_DEV_SRC} ] || [ ! -d ${PG_DEV_INST_DIR} ]; then
+    echo "Missing source worktree/clone in ${PG_DEV_SRC} or ${PG_DEV_INST}"
     echo "git worktree add --track -b <local branch> ../<local dir> origin/<Branch/TAG>\ngit clone ...\n\n"
-    echo "git worktree add --track -b ${PG_PREFIX}REL_${PGV}_STABLE ../${PG_PREFIX}${SRC_DIR} origin/${PG_PREFIX}REL_${PGV}_STABLE"
-    echo "mkdir -p ${PG_BASE}"
+    echo "git worktree add --track -b REL_${PGV}_STABLE ../${PG_DEV_NAME} origin/REL_${PGV}_STABLE"
+    echo "mkdir -p ${PG_DEV_INST}"
   else
+    export SAVED_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+    export SAVED_PGDATA=${PGDATA}
+    export SAVED_PGPORT=${PGPORT}
+    export SAVED_PGDATABASE=${PGDATABASE}
 
-    export PS1=$'\n'"ENV: ${PG_SRC}"$'\n'"[ %n@%m %C ] % "
-    export PG_SRC
-    export PG_BASE
-    export PG_BIN=${PG_BASE}/bin
-    export PGDATA=${PG_BASE}/data
+    export PS1="(PG:${PGV}) ${SAVED_PS1}"
+    export VIRTUAL_ENV="PG:${PGV}"
+    export PG_DEV_SRC
+    export PG_DEV_INST
+    export PG_BIN=${PG_DEV_INST}/bin
+    export PGDATA=${PG_DEV_INST}/data
     export PGDATABASE=postgres
-    export LD_LIBRARY_PATH=${PG_BASE}/lib
+    export LD_LIBRARY_PATH=${PG_DEV_INST}/lib
     export PATH=${PG_BIN}:${SAVED_PATH}
     if [[ "$PGV" =~ '^[0-9]+$' ]]; then
       export PGPORT=54${PGV}
@@ -78,14 +82,14 @@ else
 fi
 
 distclean() {
-  pushd ${PG_SRC}
+  pushd ${PG_DEV_SRC}
   make distclean
   popd
 }
 
 compile() {
-  pushd ${PG_SRC}
-  ./configure --prefix=${PG_BASE} --enable-debug --with-pgport=${PGPORT} --with-lz4 --with-ssl=openssl --with-python --with-perl --enable-debug --enable-cassert --enable-tap-tests CFLAGS="-ggdb -O0 -g3 -ggdb3 -fno-omit-frame-pointer"
+  pushd ${PG_DEV_SRC}
+  ./configure --prefix=${PG_DEV_INST} --enable-debug --with-pgport=${PGPORT} --with-lz4 --with-ssl=openssl --with-python --with-perl --enable-debug --enable-cassert --enable-tap-tests CFLAGS="-ggdb -O0 -g3 -ggdb3 -fno-omit-frame-pointer ${PG_ENV_CFLAGS}"
   if [ $? -gt 0 ]; then
     echo "Configure failed"
   else
@@ -98,7 +102,7 @@ compile() {
 }
 
 compile_contrib() {
-  pushd ${PG_SRC}/contrib
+  pushd ${PG_DEV_SRC}/contrib
   make install
   if [ $? -gt 0 ]; then
     echo "make install failed"
@@ -166,7 +170,7 @@ resetdb() {
 resetall() {
   stopdb "$@"
   setopt localoptions rmstarsilent
-  rm -rf $PG_BASE/*
+  rm -rf $PG_DEV_INST/*
   distclean
   compile
   compile_contrib
@@ -176,15 +180,41 @@ resetall() {
 deactivate() {
   export PATH=${SAVED_PATH}
   export PS1=${SAVED_PS1}
-
-  unset PG_SRC
-  unset PG_BASE
+  if [ ! -z "$VIRTUAL_ENV" ]; then
+    export VIRTUAL_ENV=${SAVED_VIRTUAL_ENV}
+  else
+    unset VIRTUAL_ENV
+  fi
+  if [ ! -z "$SAVED_LD_LIBRARY_PATH" ]; then
+    export LD_LIBRARY_PATH=${SAVED_LD_LIBRARY_PATH}
+  else
+    unset LD_LIBRARY_PATH
+  fi
+  if [ ! -z "$SAVED_PGDATA" ]; then
+    export PGDATA=${SAVED_PGDATA}
+  else
+    unset PGDATA
+  fi
+  if [ ! -z "$SAVED_PGPORT" ]; then
+    export PGPORT=${SAVED_PGPORT}
+  else
+    unset PGPORT
+  fi
+  if [ ! -z "$SAVED_PGDATABASE" ]; then
+    export PGDATABASE=${SAVED_PGDATABASE}
+  else
+    unset PGDATABASE
+  fi
+  unset PG_DEV_SRC
+  unset PG_DEV_INST
   unset PG_BIN
-  unset LD_LIBRARY_PATH
-  unset PGDATA
-  unset PGDATABASE
+  unset SAVED_LD_LIBRARY_PATH
+  unset SAVED_PGDATA
+  unset SAVED_PGPORT
+  unset SAVED_PGDATABASE
   unset SAVED_PATH
   unset SAVED_PS1
+  unset SAVED_VIRTUAL_ENV
   unset -f distclean
   unset -f compile
   unset -f compile_contrib

@@ -2,11 +2,27 @@
 
 ## Configuration settings
 
+### Setting for make
+
 | Config | Defaults | Description |
+| --- | --- | --- |
+| MAKEFLAGS | | make settings ex: '-j 4'|
+
+### Setting for pg-env 
+
+| Config | Defaults | Description |
+| --- | --- | --- |
 | PGV | None | PostgreSQL Major Version or HEAD |
 | GIT_DIR | ${HOME}/gitwork | Your GIT workspace directory name |
 | PG_DEV_NAME | postgresql-<PGV> | Name of the source code folder (a git worktree) |
 | PG_INST_NAME | <PG_DEV_NAME>-INST | Name of the install folder |
+| PG_ENV_CFLAGS | | Extra CFLAGS |
+
+### Advance setting for pg-env 
+
+| Config | Defaults | Description |
+| --- | --- | --- |
+| PG_ENV_DEBUG | | Set this var to non empoty to print some debug info |
 
 ## Setting up environment
 
@@ -14,10 +30,19 @@ You can create ~/.pg-env with your global settings
 
 You can create ./.pg-env with your per folder settings
 
-export PGV=<major version|HEAD>
+You can also export PGV=<major version|HEAD>
+
+PGPORT will be 5400 + PGV. When PGV is set to HEAD PGPORT is set to 5432
+When working with multiple Clusters, passed on id is added as a prefix to PGPORT
+Note: Max 1 - 5 Clusters are allowed.
+
+## Setup
+
+- Clone
+- Symlink `ln -s <Clone Dir>/pg-env ~/bin/pg-env`
 
 ## Activate PostgreSQL Developmnent ENvironment
-`source pg-env`
+`source ~/bin/pg-env`
 
 ## Run distclean on PostgreSQL source
 `distclean`
@@ -29,43 +54,43 @@ export PGV=<major version|HEAD>
 `compile_contrib`
 
 ## Start PostgreSQL
-`startdb <Nodes>`
+`startdb <Clusters>`
 ex:
   startdb
   startdb 1 2 3
 
 ## Stop PostgtreSQL
-`stopdb <Nodes>`
+`stopdb <Clusters>`
 ex:
   stopdb
   stopdb 1 2 3
 
 ## Restart PostgreSQL
-`restartdb <Nodes>`
+`restartdb <Clusters>`
 ex:
   restartdb
   restartdb 1 2 3
 
 ## Remove PGDATA
-`cleandb <Nodes>`
+`cleandb <Clusters>`
 ex:
   cleandb
   cleandb 1 2 3
 
 ## Initialize PostgreSQL Cluster and include custom config
-`setupdb <Nodes>`
+`setupdb <Clusters>`
 ex:
   setupdb
   setupdb 1 2 3
 
 ## Reset DB
-`resetdb <Nodes>`
+`resetdb <Clusters>`
 ex:
   resetdb
   resetdb 1 2 3
 
 ## Reset database and install direcotory
-`resetall <Nodes>`
+`resetall <Clusters>`
 ex:
   resetall
   resetall 1 2 3

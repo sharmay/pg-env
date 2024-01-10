@@ -112,21 +112,21 @@ compile_contrib() {
 
 startdb(){
   if [ -z "$1" ]; then
-    pg_ctl start
+    [ -d "${PGDATA}" ] && pg_ctl start
   else
     for NodeN in "$@"
     do
-      pg_ctl start -D ${PGDATA}-${NodeN}
+      [ -d "${PGDATA}-${NodeN}" ] && pg_ctl start -D ${PGDATA}-${NodeN}
     done
   fi
 }
 stopdb(){
   if [ -z "$1" ]; then
-  pg_ctl stop
+    [ -d "${PGDATA}" ] && pg_ctl stop
   else
     for NodeN in "$@"
     do
-      pg_ctl stop -D ${PGDATA}-${NodeN}
+      [ -d "${PGDATA}-${NodeN}" ] && pg_ctl stop -D ${PGDATA}-${NodeN}
     done
   fi
 }
@@ -138,12 +138,12 @@ restartdb(){
 
 cleandb(){
   if [ -z "$1" ]; then
-    setopt localoptions rmstarsilent
+    [ -n "$ZSH_VERSION" ] && setopt localoptions rmstarsilent
     rm -rf $PGDATA/*
   else
     for NodeN in "$@"
     do
-    setopt localoptions rmstarsilent
+      [ -n "$ZSH_VERSION" ] && setopt localoptions rmstarsilent
       rm -rf ${PGDATA}-${NodeN}/*
     done
   fi
@@ -151,11 +151,12 @@ cleandb(){
 setupdb(){
   if [ -z "$1" ]; then
     initdb --data-checksums --username=sharyogi
+    echo "include = '${GIT_DIR}/pgconfigs/pg${PGV}.conf'" >> ${PGDATA}-${NodeN}/postgresql.conf
   else
     for NodeN in "$@"
     do
       initdb --data-checksums --username=sharyogi -D ${PGDATA}-${NodeN}
-      echo "include = '../../pg${PGV}-${NodeN}.conf'" >> ${PGDATA}-${NodeN}/postgresql.conf
+      echo "include = '${GIT_DIR}/pgconfigs/pg${PGV}-${NodeN}.conf'" >> ${PGDATA}-${NodeN}/postgresql.conf
     done
   fi
 }
@@ -169,7 +170,7 @@ resetdb() {
 
 resetall() {
   stopdb "$@"
-  setopt localoptions rmstarsilent
+  [ -n "$ZSH_VERSION" ] && setopt localoptions rmstarsilent
   rm -rf $PG_DEV_INST/*
   distclean
   compile

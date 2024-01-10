@@ -18,6 +18,12 @@
 | PG_INST_NAME | <PG_DEV_NAME>-INST | Name of the install folder |
 | PG_ENV_CFLAGS | | Extra CFLAGS |
 
+PostgreSQL extra configs shall be store in `${GIT_DIR}/pgconfigs/` in this naming convention:
+```
+pg${PGV}.conf
+pg${PGV}-<Cluster #>.conf
+```
+
 ### Advance setting for pg-env 
 
 | Config | Defaults | Description |

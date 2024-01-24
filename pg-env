@@ -52,48 +52,68 @@ fi
 if [ -z "$PGV" ]; then
   echo "Missing PGV, export PGV=HEAD or export PGV=15"
 else
-  PG_DEV_SRC=${GIT_DIR}/${PG_DEV_NAME}
-  PG_DEV_INST=${GIT_DIR}/${PG_INST_NAME}
-  if [ ! -d ${PG_DEV_SRC} ] || [ ! -d ${PG_DEV_INST_DIR} ]; then
-    echo "Missing source worktree/clone in ${PG_DEV_SRC} or ${PG_DEV_INST}"
-    echo "git worktree add --track -b <local branch> ../<local dir> origin/<Branch/TAG>\ngit clone ...\n\n"
-    echo "git worktree add --track -b REL_${PGV}_STABLE ../${PG_DEV_NAME} origin/REL_${PGV}_STABLE"
-    echo "mkdir -p ${PG_DEV_INST}"
-  else
-    export SAVED_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
-    export SAVED_PGDATA=${PGDATA}
-    export SAVED_PGPORT=${PGPORT}
-    export SAVED_PGDATABASE=${PGDATABASE}
-
-    export PS1="(PG:${PGV}) ${SAVED_PS1}"
-    export VIRTUAL_ENV="PG:${PGV}"
-    export PG_DEV_SRC
-    export PG_DEV_INST
-    export PG_BIN=${PG_DEV_INST}/bin
-    export PGDATA=${PG_DEV_INST}/data
-    export PGDATABASE=postgres
-    export LD_LIBRARY_PATH=${PG_DEV_INST}/lib
-    export PATH=${PG_BIN}:${SAVED_PATH}
-    if [[ "$PGV" =~ '^[0-9]+$' ]]; then
-      export PGPORT=54${PGV}
+  if [ -z "$PG_ENV_VENV" ]; then
+    PG_DEV_SRC=${GIT_DIR}/${PG_DEV_NAME}
+    PG_DEV_INST=${GIT_DIR}/${PG_INST_NAME}
+    if [ ! -d ${PG_DEV_SRC} ] || [ ! -d ${PG_DEV_INST_DIR} ]; then
+      echo "Missing source worktree/clone in ${PG_DEV_SRC} or ${PG_DEV_INST}"
+      echo "git worktree add --track -b <local branch> ../<local dir> origin/<Branch/TAG>\ngit clone ...\n\n"
+      echo "git worktree add --track -b REL_${PGV}_STABLE ../${PG_DEV_NAME} origin/REL_${PGV}_STABLE"
+      echo "mkdir -p ${PG_DEV_INST}"
     else
-      export PGPORT=5432
+      if [ -f ${PG_DEV_SRC}/meson.build ]; then
+        export MESON_BUILD_PRESENT=1
+      fi
+      export PG_ENV_VENV=1
+      export SAVED_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+      export SAVED_PGDATA=${PGDATA}
+      export SAVED_PGPORT=${PGPORT}
+      export SAVED_PGDATABASE=${PGDATABASE}
+
+      export PS1="(PG:${PGV}) ${SAVED_PS1}"
+      export VIRTUAL_ENV="PG:${PGV}"
+      export PG_DEV_SRC
+      export PG_DEV_INST
+      export PG_BIN=${PG_DEV_INST}/bin
+      export PGDATA=${PG_DEV_INST}/data
+      export PGDATABASE=postgres
+      export LD_LIBRARY_PATH=${PG_DEV_INST}/lib
+      export PATH=${PG_BIN}:${SAVED_PATH}
+      if [[ "$PGV" =~ '^[0-9]+$' ]]; then
+        export PGPORT=54${PGV}
+      else
+        export PGPORT=5432
+      fi
     fi
-fi
 
 distclean() {
   pushd ${PG_DEV_SRC}
   make distclean
+  if [ -z ${MESON_BUILD_PRESENT} ]; then
+      (cd build; ninja clean)
+  fi
   popd
 }
 
 compile() {
   pushd ${PG_DEV_SRC}
-  ./configure --prefix=${PG_DEV_INST} --enable-debug --with-pgport=${PGPORT} --with-lz4 --with-ssl=openssl --with-python --with-perl --enable-debug --enable-cassert --enable-tap-tests CFLAGS="-ggdb -O0 -g3 -ggdb3 -fno-omit-frame-pointer ${PG_ENV_CFLAGS}"
-  if [ $? -gt 0 ]; then
-    echo "Configure failed"
+  if [ -z ${MESON_BUILD_PRESENT} ]; then
+    ./configure --prefix=${PG_DEV_INST} --enable-debug --with-pgport=${PGPORT} --with-lz4 --with-ssl=openssl --with-python --with-perl --enable-debug --enable-cassert --enable-tap-tests CFLAGS="-ggdb -O0 -g3 -ggdb3 -fno-omit-frame-pointer ${PG_ENV_CFLAGS}"
   else
-    make install
+    meson setup build --prefix=${PG_DEV_INST} -Dpgport=${PGPORT} -Dlz4=enabled -Dssl=openssl -Dplpython=enabled -Dplperl=enabled -Ddebug=true -Dcassert=true -Dtap_tests=enabled -Dc_args="-ggdb -O0 -g3 -ggdb3 -fno-omit-frame-pointer ${PG_ENV_CFLAGS}"
+  fi
+  if [ $? -gt 0 ]; then
+    if [ -z ${MESON_BUILD_PRESENT} ]; then
+      echo "Configure failed"
+    else
+      echo "meson setup failed"
+    fi
+  else
+    if [ -z ${MESON_BUILD_PRESENT} ]; then
+      make install
+    else
+      (cd build; ninja -v install)
+    fi
     if [ $? -gt 0 ]; then
       echo "make install failed"
     fi
@@ -102,12 +122,14 @@ compile() {
 }
 
 compile_contrib() {
-  pushd ${PG_DEV_SRC}/contrib
-  make install
-  if [ $? -gt 0 ]; then
-    echo "make install failed"
+  if [ -z ${MESON_BUILD_PRESENT} ]; then
+    pushd ${PG_DEV_SRC}/contrib
+    make install
+    if [ $? -gt 0 ]; then
+      echo "make install failed"
+    fi
+    popd
   fi
-  popd
 }
 
 startdb(){
@@ -206,16 +228,6 @@ deactivate() {
   else
     unset PGDATABASE
   fi
-  unset PG_DEV_SRC
-  unset PG_DEV_INST
-  unset PG_BIN
-  unset SAVED_LD_LIBRARY_PATH
-  unset SAVED_PGDATA
-  unset SAVED_PGPORT
-  unset SAVED_PGDATABASE
-  unset SAVED_PATH
-  unset SAVED_PS1
-  unset SAVED_VIRTUAL_ENV
   unset -f distclean
   unset -f compile
   unset -f compile_contrib
@@ -227,6 +239,21 @@ deactivate() {
   unset -f resetdb
   unset -f resetall
   unset -f deactivate
+  unset MESON_BUILD_PRESENT
+  unset PG_DEV_SRC
+  unset PG_DEV_INST
+  unset PG_BIN
+  unset SAVED_LD_LIBRARY_PATH
+  unset SAVED_PGDATA
+  unset SAVED_PGPORT
+  unset SAVED_PGDATABASE
+  unset SAVED_PATH
+  unset SAVED_PS1
+  unset SAVED_VIRTUAL_ENV
+  unset PG_ENV_VENV
 }
+  else
+    echo "Already in pg-env VENV"
+  fi
 fi
 

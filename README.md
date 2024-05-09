@@ -18,7 +18,7 @@
 | PG_INST_NAME | <PG_DEV_NAME>-INST | Name of the install folder |
 | PG_ENV_CFLAGS | | Extra CFLAGS |
 
-PostgreSQL extra configs shall be store in `${GIT_DIR}/pgconfigs/` in this naming convention:
+PostgreSQL extra configs shall be stored in `${GIT_DIR}/pgconfigs/` in this naming convention:
 ```
 pg${PGV}.conf
 pg${PGV}-<Cluster #>.conf
@@ -28,7 +28,7 @@ pg${PGV}-<Cluster #>.conf
 
 | Config | Defaults | Description |
 | --- | --- | --- |
-| PG_ENV_DEBUG | | Set this var to non empoty to print some debug info |
+| PG_ENV_DEBUG | | Set this var to non empty to print some debug info |
 
 ## Setting up environment
 
@@ -47,7 +47,23 @@ Note: Max 1 - 5 Clusters are allowed.
 - Clone
 - Symlink `ln -s <Clone Dir>/pg-env ~/bin/pg-env`
 
-## Activate PostgreSQL Developmnent ENvironment
+## Setup commitfest Patch testing
+
+Visit https://commitfest.postgresql.org/ and click on active commitfest and from the URL record CommitFest ID
+Now click on a commitfest entry and from the URL record commitfest Entry ID
+Ex: https://commitfest.postgresql.org/48/4962/  commitfest IS is 48 and Entry ID is 4962
+
+chdir to folder where PostgreSQL source is cloned
+
+For testing against development HEAD
+
+`pg-env commitfest 48 4962`
+
+For testing against a stable branch ex: release 12
+
+`pg-env commitfest 48 4962 REL_12_STABLE`
+
+## Activate PostgreSQL Development Environment
 `source ~/bin/pg-env`
 
 ## Run distclean on PostgreSQL source

@@ -11,10 +11,62 @@
 # PG_INST_NAME
 #
 
+create_pgenv() {
+cat >../${2}/.pg-env <<EOF
+export PGV=${1}
+PG_DEV_NAME=${2}
+export SKIP_MESON_BUILD=1
+EOF
+}
+
+commitfest() {
+  shift
+  FestID=$1
+  EntryID=$2
+  echo "CommitFest Testing https://commitfest.postgresql.org/$FestID/$EntryID"
+  EXIT_VALUE=0
+  if [ $# -ne 2 ] && [ $# -ne 3 ]; then
+    EXIT_VALUE=1
+    echo "Usage: $0 commitfest CommitFestID EntryID"
+    echo "or"
+    echo "Usage: $0 commitfest CommitFestID EntryID <PG_RELEASED_BRANCH_NAME>"
+  fi
+  if [ ! -f src/include/postgres.h ] || [ ! -d .git ] ; then
+    EXIT_VALUE=1
+    echo "Run this command from PostgreSQL git checkout"
+  fi
+  if [ $# -eq 2 ]; then
+    IsBranchPreset=$( git worktree list | grep '\[CF_${FestID}_${EntryID}\]' )
+  else
+    IsBranchPreset=$( git worktree list | grep '\[${3}_CF_${FestID}_${EntryID}\]' )
+  fi
+  if [ ! -z "${IsBranchPreset}" ]; then
+    EXIT_VALUE=1
+    echo "Worktree already present, to remove it use following"
+    echo "git worktree remove --force <worktree dir>"
+    echo "git branch -d <branch name>"
+  fi
+  if [ $EXIT_VALUE -eq 0 ]; then
+    if [ $# -eq 2 ]; then
+      git worktree add --track -b CF_${FestID}_${EntryID} ../postgresql-CF_${FestID}_${EntryID}
+      create_pgenv HEAD postgresql-CF_${FestID}_${EntryID}
+    else
+      git worktree add --track -b CF_${FestID}_${EntryID}_${3} ../postgresql-CF_${FestID}_${EntryID}_${3} origin/$3
+      create_pgenv $(grep PACKAGE_VERSION ../postgresql-CF_${FestID}_${EntryID}_${3}/configure | grep -o '[0-9]*' | head -1) postgresql-CF_${FestID}_${EntryID}_${3}
+    fi
+    EXIT_VALUE=$?
+  fi
+  exit $EXIT_VALUE
+}
+
 if [ "$0" = "$BASH_SOURCE" ]; then
+  if [ "$1" = "commitfest" ]; then
+      commitfest $@
+  fi
   echo "source $0"
   exit 1
 fi
+SAVED_PGV=${PGV}
 if [[ -f ~/.pg-env ]]; then
   [ ! -z "$PG_ENV_DEBUG" ] && echo "Loading ~/.pg-env"
   source ~/.pg-env
@@ -62,7 +114,7 @@ else
       echo "mkdir -p ${PG_DEV_INST}"
     else
       if [ -f ${PG_DEV_SRC}/meson.build ]; then
-        export MESON_BUILD_PRESENT=1
+        [ -z "$SKIP_MESON_BUILD" ] && export MESON_BUILD_PRESENT=1
       fi
       export PG_ENV_VENV=1
       export SAVED_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
@@ -79,7 +131,7 @@ else
       export PGDATABASE=postgres
       export LD_LIBRARY_PATH=${PG_DEV_INST}/lib
       export PATH=${PG_BIN}:${SAVED_PATH}
-      if [[ "$PGV" =~ '^[0-9]+$' ]]; then
+      if [[ $PGV =~ ^[0-9]+$ ]]; then
         export PGPORT=54${PGV}
       else
         export PGPORT=5432
@@ -87,7 +139,9 @@ else
     fi
 
 distclean() {
+  resetinst "$@"
   pushd ${PG_DEV_SRC}
+  make clean
   make distclean
   if [ -z ${MESON_BUILD_PRESENT} ]; then
       (cd build; ninja clean)
@@ -98,9 +152,9 @@ distclean() {
 compile() {
   pushd ${PG_DEV_SRC}
   if [ -z ${MESON_BUILD_PRESENT} ]; then
-    ./configure --prefix=${PG_DEV_INST} --enable-debug --with-pgport=${PGPORT} --with-lz4 --with-ssl=openssl --with-python --with-perl --enable-debug --enable-cassert --enable-tap-tests CFLAGS="-ggdb -O0 -g3 -ggdb3 -fno-omit-frame-pointer ${PG_ENV_CFLAGS}"
+    time ./configure --prefix=${PG_DEV_INST} --enable-debug --with-pgport=${PGPORT} --with-lz4 --with-ssl=openssl --with-python --with-perl --enable-debug --enable-cassert --enable-tap-tests CFLAGS="-ggdb -O0 -g3 -ggdb3 -fno-omit-frame-pointer ${PG_ENV_CFLAGS}" | tee /tmp/pg_compile.log
   else
-    meson setup build --prefix=${PG_DEV_INST} -Dpgport=${PGPORT} -Dlz4=enabled -Dssl=openssl -Dplpython=enabled -Dplperl=enabled -Ddebug=true -Dcassert=true -Dtap_tests=enabled -Dc_args="-ggdb -O0 -g3 -ggdb3 -fno-omit-frame-pointer ${PG_ENV_CFLAGS}"
+    time meson setup build --prefix=${PG_DEV_INST} -Dpgport=${PGPORT} -Dlz4=enabled -Dssl=openssl -Dplpython=enabled -Dplperl=enabled -Ddebug=true -Dcassert=true -Dtap_tests=enabled -Dc_args="-ggdb -O0 -g3 -ggdb3 -fno-omit-frame-pointer ${PG_ENV_CFLAGS}" | tee /tmp/pg_compile.log
   fi
   if [ $? -gt 0 ]; then
     if [ -z ${MESON_BUILD_PRESENT} ]; then
@@ -110,9 +164,9 @@ compile() {
     fi
   else
     if [ -z ${MESON_BUILD_PRESENT} ]; then
-      make install
+      make install | tee -a /tmp/pg_compile.log
     else
-      (cd build; ninja -v install)
+      (cd build; ninja -v install) | tee -a /tmp/pg_compile.log
     fi
     if [ $? -gt 0 ]; then
       echo "make install failed"
@@ -124,7 +178,7 @@ compile() {
 compile_contrib() {
   if [ -z ${MESON_BUILD_PRESENT} ]; then
     pushd ${PG_DEV_SRC}/contrib
-    make install
+    time make install | tee -a /tmp/pg_compile.log
     if [ $? -gt 0 ]; then
       echo "make install failed"
     fi
@@ -136,8 +190,9 @@ startdb(){
   if [ -z "$1" ]; then
     [ -d "${PGDATA}" ] && pg_ctl start
   else
-    for NodeN in "$@"
+    for NodeN in $@
     do
+      echo "Starting pg_ctl start -D ${PGDATA}-${NodeN}"
       [ -d "${PGDATA}-${NodeN}" ] && pg_ctl start -D ${PGDATA}-${NodeN}
     done
   fi
@@ -146,7 +201,7 @@ stopdb(){
   if [ -z "$1" ]; then
     [ -d "${PGDATA}" ] && pg_ctl stop
   else
-    for NodeN in "$@"
+    for NodeN in $@
     do
       [ -d "${PGDATA}-${NodeN}" ] && pg_ctl stop -D ${PGDATA}-${NodeN}
     done
@@ -163,21 +218,52 @@ cleandb(){
     [ -n "$ZSH_VERSION" ] && setopt localoptions rmstarsilent
     rm -rf $PGDATA/*
   else
-    for NodeN in "$@"
+    for NodeN in $@
     do
       [ -n "$ZSH_VERSION" ] && setopt localoptions rmstarsilent
       rm -rf ${PGDATA}-${NodeN}/*
     done
   fi
 }
+
+### TODO ###
+pexec(){
+  args=""
+  while [ $# -gt 0 ]
+  do
+    case "$1" in
+      --PEXEC_CMD=*|PEXEC_CMD=*)
+        PEXEC_CMD=${1#*=}
+        ;;
+      *)
+        args="$args $1"
+        ;;
+    esac
+    shift
+  done
+  set -- "$@" "$args"
+  if [ -z "$1" ]; then
+    echo psql -U ${USER} ${PEXEC_CMD}
+    psql -U ${USER} ${PEXEC_CMD}
+  else
+    for NodeN in $@
+    do
+      cmd="psql -U ${USER} -p ${NodeN}${PGPORT} ${PEXEC_CMD}"
+      echo $cmd
+      $cmd
+    done
+  fi
+ 
+}
+
 setupdb(){
   if [ -z "$1" ]; then
-    initdb --data-checksums --username=sharyogi
+    initdb --data-checksums --username=${USER}
     echo "include = '${GIT_DIR}/pgconfigs/pg${PGV}.conf'" >> ${PGDATA}-${NodeN}/postgresql.conf
   else
-    for NodeN in "$@"
+    for NodeN in $@
     do
-      initdb --data-checksums --username=sharyogi -D ${PGDATA}-${NodeN}
+      initdb --data-checksums --username=${USER} -D ${PGDATA}-${NodeN}
       echo "include = '${GIT_DIR}/pgconfigs/pg${PGV}-${NodeN}.conf'" >> ${PGDATA}-${NodeN}/postgresql.conf
     done
   fi
@@ -190,10 +276,13 @@ resetdb() {
   startdb "$@"
 }
 
-resetall() {
+resetinst() {
   stopdb "$@"
   [ -n "$ZSH_VERSION" ] && setopt localoptions rmstarsilent
   rm -rf $PG_DEV_INST/*
+}
+
+resetall() {
   distclean
   compile
   compile_contrib
@@ -228,6 +317,11 @@ deactivate() {
   else
     unset PGDATABASE
   fi
+  if [ ! -z "$SAVED_PGV" ]; then
+    export PGV=${SAVED_PGV}
+  else
+    unset PGV
+  fi
   unset -f distclean
   unset -f compile
   unset -f compile_contrib
@@ -239,7 +333,9 @@ deactivate() {
   unset -f resetdb
   unset -f resetall
   unset -f deactivate
+  unset -f pexec
   unset MESON_BUILD_PRESENT
+  unset PG_INST_NAME
   unset PG_DEV_SRC
   unset PG_DEV_INST
   unset PG_BIN
@@ -251,6 +347,9 @@ deactivate() {
   unset SAVED_PS1
   unset SAVED_VIRTUAL_ENV
   unset PG_ENV_VENV
+  unset SAVED_PGV
+  unset PG_DEV_NAME
+  unset GIT_DIR
 }
   else
     echo "Already in pg-env VENV"

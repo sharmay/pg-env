@@ -23,6 +23,7 @@ commitfest() {
   shift
   FestID=$1
   EntryID=$2
+  branch_name=cf/${EntryID}
   echo "CommitFest Testing https://commitfest.postgresql.org/$FestID/$EntryID"
   EXIT_VALUE=0
   if [ $# -ne 2 ] && [ $# -ne 3 ]; then
@@ -35,10 +36,16 @@ commitfest() {
     EXIT_VALUE=1
     echo "Run this command from PostgreSQL git checkout"
   fi
+  git remote show -n commitfest > /dev/null
+  if [ $? -ne 0 ]; then
+    echo "Adding commitfest as remote using https://github.com/postgresql-cfbot/postgresql.git"
+    git remote add commitfest https://github.com/postgresql-cfbot/postgresql.git
+  fi
+  git fetch commitfest ${branch_name}
   if [ $# -eq 2 ]; then
-    IsBranchPresent=$( git worktree list | grep '\[CF_${FestID}_${EntryID}\]' )
-  else
-    IsBranchPresent=$( git worktree list | grep '\[CF_${FestID}_${EntryID}_${3}\]' )
+    IsBranchPresent=$( git worktree list | grep "${branch_name}" )
+  #else
+  #  IsBranchPresent=$( git worktree list | grep "${branch_name}_${3}\]" )
   fi
   if [ ! -z "${IsBranchPresent}" ]; then
     EXIT_VALUE=1
@@ -48,11 +55,14 @@ commitfest() {
   fi
   if [ $EXIT_VALUE -eq 0 ]; then
     if [ $# -eq 2 ]; then
-      git worktree add --track -b CF_${FestID}_${EntryID} ../postgresql-CF_${FestID}_${EntryID}
+      git worktree add --track -b ${branch_name} ../postgresql-CF_${FestID}_${EntryID}
+      cd ../postgresql-CF_${FestID}_${EntryID}
+      git pull
+      # git worktree add --track -b CF_${FestID}_${EntryID} ../postgresql-CF_${FestID}_${EntryID}
       create_pgenv HEAD postgresql-CF_${FestID}_${EntryID}
-    else
-      git worktree add --track -b CF_${FestID}_${EntryID}_${3} ../postgresql-CF_${FestID}_${EntryID}_${3} origin/$3
-      create_pgenv $(grep PACKAGE_VERSION ../postgresql-CF_${FestID}_${EntryID}_${3}/configure | grep -o '[0-9]*' | head -1) postgresql-CF_${FestID}_${EntryID}_${3}
+    #else
+    #  git worktree add --track -b CF_${FestID}_${EntryID}_${3} ../postgresql-CF_${FestID}_${EntryID}_${3} origin/$3
+    #  create_pgenv $(grep PACKAGE_VERSION ../postgresql-CF_${FestID}_${EntryID}_${3}/configure | grep -o '[0-9]*' | head -1) postgresql-CF_${FestID}_${EntryID}_${3}
     fi
     EXIT_VALUE=$?
   fi
@@ -106,6 +116,8 @@ if [ "$0" = "$BASH_SOURCE" ]; then
       branch $@
   fi
   echo "source $0"
+  echo "$0 branch <new branch name>"
+  echo "$0 commitfest <CommitFestID> <CommitFest Entity ID>"
   exit 1
 fi
 SAVED_PGV=${PGV}
@@ -194,9 +206,9 @@ distclean() {
 compile() {
   pushd ${PG_DEV_SRC}
   if [ -z ${MESON_BUILD_PRESENT} ]; then
-    (time ./configure --prefix=${PG_DEV_INST}  --enable-injection-points --enable-debug --with-pgport=${PGPORT} --with-lz4 --with-ssl=openssl --with-python --with-perl --enable-debug --enable-cassert --enable-tap-tests CFLAGS="-ggdb -O0 -g3 -ggdb3 -fno-omit-frame-pointer ${PG_ENV_CFLAGS}") |& tee /tmp/pg_compile.log
+    (time ./configure --prefix=${PG_DEV_INST}  --enable-injection-points --enable-debug --with-pgport=${PGPORT} --with-systemd --with-lz4 --with-ssl=openssl --with-python --with-perl --enable-debug --enable-cassert --enable-tap-tests CFLAGS="-ggdb -O0 -g3 -ggdb3 -fno-omit-frame-pointer ${PG_ENV_CFLAGS}") |& tee /tmp/pg_compile.log
   else
-    (time meson setup build --prefix=${PG_DEV_INST} -Dpgport=${PGPORT} -Dlz4=enabled -Dssl=openssl -Dplpython=enabled -Dplperl=enabled -Ddebug=true -Dcassert=true -Dtap_tests=enabled -Dc_args="-ggdb -O0 -g3 -ggdb3 -fno-omit-frame-pointer ${PG_ENV_CFLAGS}") |& tee /tmp/pg_compile.log
+    (time meson setup build --prefix=${PG_DEV_INST} -Dpgport=${PGPORT} -Dlz4=enabled -Dssl=openssl -Dplpython=enabled -Dsystemd -Dplperl=enabled -Ddebug=true -Dcassert=true -Dtap_tests=enabled -Dc_args="-ggdb -O0 -g3 -ggdb3 -fno-omit-frame-pointer ${PG_ENV_CFLAGS}") |& tee /tmp/pg_compile.log
   fi
   if [ $? -gt 0 ]; then
     if [ -z ${MESON_BUILD_PRESENT} ]; then
@@ -206,7 +218,7 @@ compile() {
     fi
   else
     if [ -z ${MESON_BUILD_PRESENT} ]; then
-      (time make install) |& tee -a /tmp/pg_compile.log
+    (time make install) |& tee -a /tmp/pg_compile.log
     else
       (cd build; time ninja -v install) |& tee -a /tmp/pg_compile.log
     fi
@@ -302,7 +314,7 @@ pexec(){
 setupdb(){
   if [ -z "$1" ]; then
     initdb --data-checksums --username=${USER}
-    echo "include = '${GIT_DIR}/pgconfigs/pg${PGV}.conf'" >> ${PGDATA}-${NodeN}/postgresql.conf
+    echo "include = '${GIT_DIR}/pgconfigs/pg${PGV}.conf'" >> ${PGDATA}/postgresql.conf
   else
     for NodeN in $@
     do

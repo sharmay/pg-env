@@ -44,8 +44,8 @@ Note: Max 1 - 5 Clusters are allowed.
 
 ## Setup
 
-- Clone
-- Symlink `ln -s <Clone Dir>/pg-env ~/bin/pg-env`
+- Clone  
+- Symlink `ln -s <Clone Dir>/pg-env ~/bin/pg-env`  
 
 ## Setup commitfest Patch testing
 
@@ -64,60 +64,60 @@ For testing against a stable branch ex: release 12
 `pg-env commitfest 48 4962 REL_12_STABLE`
 
 ## Activate PostgreSQL Development Environment
-`source ~/bin/pg-env`
+`source ~/bin/pg-env`  
 
 ## Run distclean on PostgreSQL source
-`distclean`
+`distclean`  
 
 ## Compile PostgreSQL source and install
-`compile`
+`compile`  
 
 ## Compile PostgreSQL contrib and install
-`compile_contrib`
+`compile_contrib`  
 
 ## Start PostgreSQL
-`startdb <Clusters>`
-ex:
-  startdb
-  startdb 1 2 3
+`startdb <Clusters>`  
+ex:  
+  startdb  
+  startdb 1 2 3  
 
 ## Stop PostgtreSQL
-`stopdb <Clusters>`
-ex:
-  stopdb
-  stopdb 1 2 3
+`stopdb <Clusters>`  
+ex:  
+  stopdb  
+  stopdb 1 2 3  
 
 ## Restart PostgreSQL
-`restartdb <Clusters>`
-ex:
-  restartdb
-  restartdb 1 2 3
+`restartdb <Clusters>`  
+ex:  
+  restartdb  
+  restartdb 1 2 3  
 
 ## Remove PGDATA
-`cleandb <Clusters>`
-ex:
-  cleandb
-  cleandb 1 2 3
+`cleandb <Clusters>`  
+ex:  
+  cleandb  
+  cleandb 1 2 3  
 
 ## Initialize PostgreSQL Cluster and include custom config
-`setupdb <Clusters>`
-ex:
-  setupdb
-  setupdb 1 2 3
+`setupdb <Clusters>`  
+ex:  
+  setupdb  
+  setupdb 1 2 3  
 
 ## Reset DB
-`resetdb <Clusters>`
-ex:
-  resetdb
-  resetdb 1 2 3
+`resetdb <Clusters>`  
+ex:  
+  resetdb  
+  resetdb 1 2 3  
 
 ## Reset database and install direcotory
-`resetall <Clusters>`
-ex:
-  resetall
-  resetall 1 2 3
+`resetall <Clusters>`  
+ex:  
+  resetall  
+  resetall 1 2 3  
 
 ## deactivate the environment
-`deactivate`
-Exit from pg-env
+`deactivate`  
+Exit from pg-env  
 

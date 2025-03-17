@@ -314,19 +314,17 @@ pexec(){
 setupdb(){
   if [ -z "$1" ]; then
     initdb --data-checksums --username=${USER}
+    echo "include = '${GIT_DIR}/pgconfigs/pg${PGV}.conf'" >> ${PGDATA}/postgresql.conf
     if [ -f "$(pwd)/.pg${PGV}.conf" ]; then
         echo "include = '$(pwd)/.pg${PGV}.conf'" >> ${PGDATA}/postgresql.conf
-    else
-        echo "include = '${GIT_DIR}/pgconfigs/pg${PGV}.conf'" >> ${PGDATA}/postgresql.conf
     fi
   else
     for NodeN in $@
     do
         initdb --data-checksums --username=${USER} -D ${PGDATA}-${NodeN}
+        echo "include = '${GIT_DIR}/pgconfigs/pg${PGV}-${NodeN}.conf'" >> ${PGDATA}-${NodeN}/postgresql.conf
         if [ -f "$(pwd)/.pg${PGV}-${NodeN}.conf" ]; then
             echo "include = '$(pwd)/.pg${PGV}-${NodeN}.conf'" >> ${PGDATA}-${NodeN}/postgresql.conf
-        else
-            echo "include = '${GIT_DIR}/pgconfigs/pg${PGV}-${NodeN}.conf'" >> ${PGDATA}-${NodeN}/postgresql.conf
         fi
     done
   fi
@@ -353,6 +351,8 @@ resetall() {
 }
 
 deactivate() {
+  stopdb
+  stopdb 1 2 3
   export PATH=${SAVED_PATH}
   export PS1=${SAVED_PS1}
   if [ ! -z "$VIRTUAL_ENV" ]; then

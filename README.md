@@ -24,7 +24,7 @@ pg${PGV}.conf
 pg${PGV}-<Cluster #>.conf
 ```
 
-PostgreSQL local configs per are named similarly but starts with (.) dot and stored in worktree folder. These will superseed `${GIT_DIR}/pgconfigs/`:
+PostgreSQL local configs per folder are named similarly but starts with (.) dot and stored in worktree folder. These will overlay on top of `${GIT_DIR}/pgconfigs/` settings.
 
 ```
 .pg${PGV}.conf

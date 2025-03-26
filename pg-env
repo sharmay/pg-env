@@ -232,7 +232,7 @@ else
                         -Dlz4=enabled \
                         -Dssl=openssl \
                         -Dplpython=enabled \
-                        -Dsystemd \
+                        -Dsystemd=enabled \
                         -Dplperl=enabled \
                         -Ddebug=true \
                         -Dcassert=true \

@@ -23,49 +23,51 @@ EOF
 
 commitfest() {
     shift
-    FestID=$1
-    EntryID=$2
-    branch_name=cf/${EntryID}
-    echo "CommitFest Testing https://commitfest.postgresql.org/$FestID/$EntryID"
+    EntryID=$1
+    PG_VERSION=$2
+    echo "CommitFest Testing https://commitfest.postgresql.org/patch/$EntryID"
+    PatchURL=$(curl -s https://commitfest.postgresql.org/patch/${EntryID}/ | sed -n 's/.*Latest attachment (<a href="\(.*\.patch\)">.*<\/a>.* at .*/\1/p')
     EXIT_VALUE=0
-    if [ $# -ne 2 ] && [ $# -ne 3 ]; then
+    if [ $# -ne 1 ] && [ $# -ne 2 ]; then
         EXIT_VALUE=1
-        echo "Usage: $0 commitfest CommitFestID EntryID"
+        echo "Usage: $0 commitfest EntryID"
         echo "or"
-        echo "Usage: $0 commitfest CommitFestID EntryID <PG_RELEASED_BRANCH_NAME>"
+        echo "Usage: $0 commitfest EntryID <PG Version>"
     fi
     if [ ! -f src/include/postgres.h ] || [ ! -d .git ]; then
         EXIT_VALUE=1
         echo "Run this command from PostgreSQL git checkout"
     fi
-    git remote show -n commitfest >/dev/null
-    if [ $? -ne 0 ]; then
-        echo "Adding commitfest as remote using https://github.com/postgresql-cfbot/postgresql.git"
-        git remote add commitfest https://github.com/postgresql-cfbot/postgresql.git
+    if [ $# -eq 1 ]; then
+        branch_name=CF_${EntryID}
+    else
+        branch_name=CF_${EntryID}_${PG_VERSION}
     fi
-    git fetch commitfest ${branch_name}
-    if [ $# -eq 2 ]; then
-        IsBranchPresent=$(git worktree list | grep "${branch_name}")
-        #else
-        #  IsBranchPresent=$( git worktree list | grep "${branch_name}_${3}\]" )
-    fi
-    if [ ! -z "${IsBranchPresent}" ]; then
+    IsWorktreePresent=$(git worktree list | grep "${branch_name}")
+    IsBranchPresent=$(git branch | grep "${branch_name}")
+    if [ ! -z "${IsWorktreePresent}" ]; then
         EXIT_VALUE=1
         echo "Worktree already present, to remove it use following"
         echo "git worktree remove --force <worktree dir>"
         echo "git branch -d <branch name>"
     fi
+    if [ ! -z "${IsBranchPresent}" ]; then
+        EXIT_VALUE=1
+        echo "Branch already present, to remove it use following"
+        echo "git branch -d <branch name>"
+    fi
     if [ $EXIT_VALUE -eq 0 ]; then
-        if [ $# -eq 2 ]; then
-            git worktree add --track -b ${branch_name} ../postgresql-CF_${FestID}_${EntryID}
-            cd ../postgresql-CF_${FestID}_${EntryID}
-            git pull
-            # git worktree add --track -b CF_${FestID}_${EntryID} ../postgresql-CF_${FestID}_${EntryID}
-            create_pgenv HEAD postgresql-CF_${FestID}_${EntryID}
-            #else
-            #  git worktree add --track -b CF_${FestID}_${EntryID}_${3} ../postgresql-CF_${FestID}_${EntryID}_${3} origin/$3
-            #  create_pgenv $(grep PACKAGE_VERSION ../postgresql-CF_${FestID}_${EntryID}_${3}/configure | grep -o '[0-9]*' | head -1) postgresql-CF_${FestID}_${EntryID}_${3}
+        if [ $# -eq 1 ]; then
+            git worktree add --track -b ${branch_name} ../postgresql-${branch_name}
+            create_pgenv HEAD postgresql-${branch_name}
+        else
+            echo git worktree add --track -b ${branch_name} ../postgresql-${branch_name} origin/REL_${PG_VERSION}_STABLE
+            git worktree add --track -b ${branch_name} ../postgresql-${branch_name} origin/REL_${PG_VERSION}_STABLE
+            create_pgenv ${PG_VERSION} postgresql-${branch_name}
         fi
+        cd ../postgresql-${branch_name}
+        git pull
+        curl -s -O "${PatchURL}"
         EXIT_VALUE=$?
     fi
     exit $EXIT_VALUE
@@ -161,7 +163,9 @@ if [ -z "$PGV" ]; then
     echo "Missing PGV, export PGV=HEAD or export PGV=15"
 else
     if [ -z "$PG_ENV_VENV" ]; then
-        PG_DEV_SRC=${GIT_DIR}/${PG_DEV_NAME}
+        if [ -z "$PG_DEV_SRC" ]; then
+            PG_DEV_SRC=${GIT_DIR}/${PG_DEV_NAME}
+        fi
         PG_DEV_INST=${GIT_DIR}/${PG_INST_NAME}
         if [ ! -d ${PG_DEV_SRC} ] || [ ! -d ${PG_DEV_INST_DIR} ]; then
             echo "Missing source worktree/clone in ${PG_DEV_SRC} or ${PG_DEV_INST}"
@@ -193,12 +197,27 @@ else
                 export PGPORT=5432
             fi
         fi
-
+        help() {
+            echo "******************"
+            echo "pg-env - Help"
+            echo "******************"
+            echo "distclean 0 run make distclean"
+            echo "compile - run configure and make"
+            echo "compile_contrib - make contrib"
+            echo "startdb - start database(s)"
+            echo "stopdb - stop database(s)"
+            echo "restartdb - stop and start database(s)"
+            echo "cleandb - stop and clean database(s)"
+            echo "setupdb - initdb database(s)"
+            echo "resetdb - stop, resetdb, and start database(s)"
+            echo "resetinst - clean up PG install"
+            echo "resetall - resetinst and cleandb"
+            echo "deactivate - deactivate pg-ernv"
+        }
         distclean() {
-            resetinst "$@"
             pushd ${PG_DEV_SRC}
-            make clean
-            make distclean
+            make -j clean
+            make -j distclean
             if [ -z ${MESON_BUILD_PRESENT} ]; then
                 (
                     cd build
@@ -249,7 +268,7 @@ else
             else
                 if [ -z ${MESON_BUILD_PRESENT} ]; then
                     (
-                        time make install \
+                        time make -j install \
                     ) |& tee -a /tmp/pg_compile.log
                 else
                     (
@@ -267,7 +286,7 @@ else
         compile_contrib() {
             if [ -z ${MESON_BUILD_PRESENT} ]; then
                 pushd ${PG_DEV_SRC}/contrib
-                (time make install) |& tee -a /tmp/pg_compile.log
+                (time make -j install) |& tee -a /tmp/pg_compile.log
                 if [ $? -gt 0 ]; then
                     echo "make install failed"
                 fi
@@ -311,6 +330,14 @@ else
                     rm -rf ${PGDATA}-${NodeN}/*
                 done
             fi
+        }
+        cleaninst() {
+            [ -n "$ZSH_VERSION" ] && setopt localoptions rmstarsilent
+            rm -rf $PG_DEV_INST/*
+        }
+        cleanall() {
+            cleandb "$@"
+            cleaninst "$@"
         }
 
         ### TODO ###
@@ -360,22 +387,19 @@ else
         }
 
         resetdb() {
-            stopdb "$@"
             cleandb "$@"
             setupdb "$@"
             startdb "$@"
         }
 
         resetinst() {
-            stopdb "$@"
-            [ -n "$ZSH_VERSION" ] && setopt localoptions rmstarsilent
-            rm -rf $PG_DEV_INST/*
-        }
-
-        resetall() {
             distclean
             compile
             compile_contrib
+        }
+
+        resetall() {
+            resetinst "$@"
             resetdb "$@"
         }
 
@@ -421,8 +445,11 @@ else
             unset -f stopdb
             unset -f restartdb
             unset -f cleandb
+            unset -f cleaninst
+            unset -f cleanall
             unset -f setupdb
             unset -f resetdb
+            unset -f resetinst
             unset -f resetall
             unset -f deactivate
             unset -f pexec

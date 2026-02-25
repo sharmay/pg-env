@@ -27,6 +27,9 @@ commitfest() {
     PG_VERSION=$2
     echo "CommitFest Testing https://commitfest.postgresql.org/patch/$EntryID"
     PatchURL=$(curl -s https://commitfest.postgresql.org/patch/${EntryID}/ | sed -n 's/.*Latest attachment (<a href="\(.*\.patch\)">.*<\/a>.* at .*/\1/p')
+    PatchFILE=$(echo $PatchURL | sed -n 's/http.*\/\(.*\)/\1/p')
+    echo $PatchURL
+    echo $PatchFILE
     EXIT_VALUE=0
     if [ $# -ne 1 ] && [ $# -ne 2 ]; then
         EXIT_VALUE=1
@@ -45,6 +48,7 @@ commitfest() {
     fi
     IsWorktreePresent=$(git worktree list | grep "${branch_name}")
     IsBranchPresent=$(git branch | grep "${branch_name}")
+    FORCE_RESET=0
     if [ ! -z "${IsWorktreePresent}" ]; then
         EXIT_VALUE=1
         echo "Worktree already present, to remove it use following"
@@ -56,18 +60,36 @@ commitfest() {
         echo "Branch already present, to remove it use following"
         echo "git branch -d <branch name>"
     fi
-    if [ $EXIT_VALUE -eq 0 ]; then
+    if [ $EXIT_VALUE -gt 0 ]; then
+        echo -n "Force reset branch Y/N? (N) "
+        read answer
+        case "$answer" in
+            y|Y)
+                FORCE_RESET=1
+                ;;
+        esac
+    fi
+    if [ $EXIT_VALUE -eq 0 ] || [ $FORCE_RESET -gt 0 ]; then
         if [ $# -eq 1 ]; then
-            git worktree add --track -b ${branch_name} ../postgresql-${branch_name}
-            create_pgenv HEAD postgresql-${branch_name}
+            if [ $FORCE_RESET -eq 1 ]; then
+                git -C ../postgresql-${branch_name} reset --hard origin/master
+            else
+                git worktree add --track -b ${branch_name} ../postgresql-${branch_name}
+                create_pgenv HEAD postgresql-${branch_name}
+            fi
         else
-            echo git worktree add --track -b ${branch_name} ../postgresql-${branch_name} origin/REL_${PG_VERSION}_STABLE
-            git worktree add --track -b ${branch_name} ../postgresql-${branch_name} origin/REL_${PG_VERSION}_STABLE
-            create_pgenv ${PG_VERSION} postgresql-${branch_name}
+            if [ $FORCE_RESET -eq 1 ]; then
+                git -C ../postgresql-${branch_name} reset --hard origin/REL_${PG_VERSION}_STABLE
+            else
+                git worktree add --track -b ${branch_name} ../postgresql-${branch_name} origin/REL_${PG_VERSION}_STABLE
+                create_pgenv ${PG_VERSION} postgresql-${branch_name}
+            fi
         fi
         cd ../postgresql-${branch_name}
         git pull
+        echo "Downloading patch: ${PatchFILE}"
         curl -s -O "${PatchURL}"
+        git am "${PatchFILE}"
         EXIT_VALUE=$?
     fi
     exit $EXIT_VALUE
@@ -208,6 +230,8 @@ else
             echo "stopdb - stop database(s)"
             echo "restartdb - stop and start database(s)"
             echo "cleandb - stop and clean database(s)"
+            echo "cleaninst - clean PG install"
+            echo "cleanall - clean database(s) and PG install"
             echo "setupdb - initdb database(s)"
             echo "resetdb - stop, resetdb, and start database(s)"
             echo "resetinst - clean up PG install"

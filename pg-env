@@ -236,6 +236,10 @@ else
             echo "resetdb - stop, resetdb, and start database(s)"
             echo "resetinst - clean up PG install"
             echo "resetall - resetinst and cleandb"
+            echo "c - make chcck"
+            echo "cw - make chcck-world"
+            echo "ic - make installchcck"
+            echo "icw - make installchcck-world"
             echo "deactivate - deactivate pg-ernv"
         }
         distclean() {
@@ -427,6 +431,30 @@ else
             resetdb "$@"
         }
 
+        ic() {
+            pushd ${PG_DEV_SRC}
+            make -j installcheck
+            popd
+        }
+
+        icw() {
+            pushd ${PG_DEV_SRC}
+            make -j installcheck-world
+            popd
+        }
+
+        c() {
+            pushd ${PG_DEV_SRC}
+            make -j check
+            popd
+        }
+
+        cw() {
+            pushd ${PG_DEV_SRC}
+            make -j check-world
+            popd
+        }
+
         deactivate() {
             stopdb
             stopdb 1 2 3
@@ -475,6 +503,10 @@ else
             unset -f resetdb
             unset -f resetinst
             unset -f resetall
+            unset -f ic
+            unset -f icw
+            unset -f c
+            unset -f cw
             unset -f deactivate
             unset -f pexec
             unset MESON_BUILD_PRESENT

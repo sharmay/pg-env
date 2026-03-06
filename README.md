@@ -64,11 +64,11 @@ chdir to folder where PostgreSQL source is cloned
 
 For testing against development HEAD
 
-`pg-env commitfest 48 4962`
+`pg-env commitfest 4962`
 
 For testing against a stable branch ex: release 12
 
-`pg-env commitfest 48 4962 REL_12_STABLE`
+`pg-env commitfest 4962 12`
 
 ## Activate PostgreSQL Development Environment
 `source ~/bin/pg-env`  

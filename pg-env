@@ -223,7 +223,7 @@ else
             echo "******************"
             echo "pg-env - Help"
             echo "******************"
-            echo "distclean 0 run make distclean"
+            echo "distclean - run make distclean"
             echo "compile - run configure and make"
             echo "compile_contrib - make contrib"
             echo "startdb - start database(s)"
@@ -236,11 +236,11 @@ else
             echo "resetdb - stop, resetdb, and start database(s)"
             echo "resetinst - clean up PG install"
             echo "resetall - resetinst and cleandb"
-            echo "c - make chcck"
-            echo "cw - make chcck-world"
-            echo "ic - make installchcck"
-            echo "icw - make installchcck-world"
-            echo "deactivate - deactivate pg-ernv"
+            echo "c - make check"
+            echo "cw - make check-world"
+            echo "ic - make installcheck"
+            echo "icw - make installcheck-world"
+            echo "deactivate - deactivate pg-env"
         }
         distclean() {
             pushd ${PG_DEV_SRC}
@@ -433,25 +433,45 @@ else
 
         ic() {
             pushd ${PG_DEV_SRC}
-            make -j installcheck
+            if [ -z ${MESON_BUILD_PRESENT} ]; then
+                make -j installcheck
+            else
+                cd build
+                meson test -q --print-errorlogs --setup running --suite regress-running
+            fi
             popd
         }
 
         icw() {
             pushd ${PG_DEV_SRC}
-            make -j installcheck-world
+            if [ -z ${MESON_BUILD_PRESENT} ]; then
+                make -j installcheck-world
+            else
+                cd build
+                meson test -q --print-errorlogs --setup running
+            fi
             popd
         }
 
         c() {
             pushd ${PG_DEV_SRC}
-            make -j check
+            if [ -z ${MESON_BUILD_PRESENT} ]; then
+                make -j check
+            else
+                cd build
+                meson test -q --print-errorlogs --suite setup --suite regress
+            fi
             popd
         }
 
         cw() {
             pushd ${PG_DEV_SRC}
-            make -j check-world
+            if [ -z ${MESON_BUILD_PRESENT} ]; then
+                make -j check-world
+            else
+                cd build
+                meson test -q --print-errorlogs
+            fi
             popd
         }
 
@@ -525,6 +545,7 @@ else
             unset SAVED_PGV
             unset PG_DEV_NAME
             unset GIT_DIR
+            unset SKIP_MESON_BUILD
         }
     else
         echo "Already in pg-env VENV"

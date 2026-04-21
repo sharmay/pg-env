@@ -14,9 +14,9 @@
 create_pgenv() {
 
 cat >../${2}/.pg-env <<EOF
-export PGV=${1}
+PGV=${1}
 PG_DEV_NAME=${2}
-export SKIP_MESON_BUILD=1
+#SKIP_MESON_BUILD=1
 EOF
 
 }
@@ -33,9 +33,9 @@ commitfest() {
     EXIT_VALUE=0
     if [ $# -ne 1 ] && [ $# -ne 2 ]; then
         EXIT_VALUE=1
-        echo "Usage: $0 commitfest EntryID"
+        echo "Usage: $0 commitfest <CommitFest Entity ID>"
         echo "or"
-        echo "Usage: $0 commitfest EntryID <PG Version>"
+        echo "Usage: $0 commitfest <CommitFest Entity ID> <PG Major Version>"
     fi
     if [ ! -f src/include/postgres.h ] || [ ! -d .git ]; then
         EXIT_VALUE=1
@@ -143,7 +143,7 @@ if [ "$0" = "$BASH_SOURCE" ]; then
     fi
     echo "source $0"
     echo "$0 branch <new branch name>"
-    echo "$0 commitfest <CommitFestID> <CommitFest Entity ID>"
+    echo "$0 commitfest <CommitFest Entity ID> <PG Major Version>"
     exit 1
 fi
 SAVED_PGV=${PGV}
@@ -244,13 +244,11 @@ else
         }
         distclean() {
             pushd ${PG_DEV_SRC}
-            make -j clean
-            make -j distclean
             if [ -z ${MESON_BUILD_PRESENT} ]; then
-                (
-                    cd build
-                    ninja clean
-                )
+                make -j clean
+                make -j distclean
+            else
+                  ninja -C build clean
             fi
             popd
         }
@@ -261,29 +259,35 @@ else
                 (
                     time ./configure \
                         --prefix=${PG_DEV_INST} \
-                        --enable-injection-points \
-                        --enable-debug \
                         --with-pgport=${PGPORT} \
-                        --with-systemd --with-lz4 \
-                        --with-ssl=openssl \
-                        --with-python --with-perl \
-                        --enable-debug --enable-cassert \
+                        --enable-cassert \
+                        --enable-debug \
+                        --enable-injection-points \
                         --enable-tap-tests \
+                        --with-lz4 \
+                        --with-perl \
+                        --with-python \
+                        --with-ssl=openssl \
+                        --with-systemd \
+                        --with-zstd \
                         CFLAGS="-ggdb -O0 -g3 -ggdb3 -fno-omit-frame-pointer ${PG_ENV_CFLAGS}"
                 ) |& tee /tmp/pg_compile.log
             else
                 (
                     time meson setup build \
                         --prefix=${PG_DEV_INST} \
+                        --buildtype=debug \
                         -Dpgport=${PGPORT} \
-                        -Dlz4=enabled \
-                        -Dssl=openssl \
-                        -Dplpython=enabled \
-                        -Dsystemd=enabled \
-                        -Dplperl=enabled \
-                        -Ddebug=true \
                         -Dcassert=true \
+                        -Ddebug=true \
+                        -Dinjection_points=true \
+                        -Dlz4=enabled \
+                        -Dplperl=enabled \
+                        -Dplpython=enabled \
+                        -Dssl=openssl \
+                        -Dsystemd=enabled \
                         -Dtap_tests=enabled \
+                        -Dzstd=enabled \
                         -Dc_args="-ggdb -O0 -g3 -ggdb3 -fno-omit-frame-pointer ${PG_ENV_CFLAGS}" \
                 ) |& tee /tmp/pg_compile.log
             fi
@@ -434,10 +438,12 @@ else
         ic() {
             pushd ${PG_DEV_SRC}
             if [ -z ${MESON_BUILD_PRESENT} ]; then
-                make -j installcheck
+                make -j installcheck |& tee /tmp/ic.log
             else
-                cd build
-                meson test -q --print-errorlogs --setup running --suite regress-running
+                (
+                    cd build
+                    meson test -q --print-errorlogs --setup running --suite regress-running |& tee /tmp/ic.log
+                )
             fi
             popd
         }
@@ -445,10 +451,12 @@ else
         icw() {
             pushd ${PG_DEV_SRC}
             if [ -z ${MESON_BUILD_PRESENT} ]; then
-                make -j installcheck-world
+                make -j installcheck-world |& tee /tmp/icw.log
             else
-                cd build
-                meson test -q --print-errorlogs --setup running
+                (
+                    cd build
+                    meson test -q --print-errorlogs --setup running |& tee /tmp/icw.log
+                )
             fi
             popd
         }
@@ -456,10 +464,12 @@ else
         c() {
             pushd ${PG_DEV_SRC}
             if [ -z ${MESON_BUILD_PRESENT} ]; then
-                make -j check
+                make -j check |& tee /tmp/c.log
             else
-                cd build
-                meson test -q --print-errorlogs --suite setup --suite regress
+                (
+                    cd build
+                    meson test -q --print-errorlogs --suite setup --suite regress |& tee /tmp/c.log
+                )
             fi
             popd
         }
@@ -467,10 +477,12 @@ else
         cw() {
             pushd ${PG_DEV_SRC}
             if [ -z ${MESON_BUILD_PRESENT} ]; then
-                make -j check-world
+                make -j check-world |& tee /tmp/cw.log
             else
-                cd build
-                meson test -q --print-errorlogs
+                (
+                    cd build
+                    meson test -q --print-errorlogs |& tee /tmp/cw.log
+                )
             fi
             popd
         }

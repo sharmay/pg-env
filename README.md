@@ -76,6 +76,8 @@ When sourced, `pg-env` sets up environment variables (`PATH`, `PGDATA`, `PGPORT`
 - Non-numeric versions (HEAD): port = 5432
 - Multi-node: node N uses port `N<PGPORT>` (max 5 nodes)
 
+| Note: configure port in PostgreSQL Configuration Files based on this.
+
 ### PostgreSQL Configuration Files
 
 Global configs are stored in `${GIT_DIR}/pgconfigs/` with this naming convention:
@@ -263,7 +265,7 @@ pexec 2
 compile && install && ic
 ```
 
-### Exit
+### Exiting Virtual Environment
 
 | Command | Description |
 |---------|-------------|

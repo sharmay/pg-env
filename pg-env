@@ -110,10 +110,10 @@ branch() {
         EXIT_VALUE=1
         echo "Run this command from PostgreSQL git checkout"
     fi
-    if [ $# -eq 2 ]; then
-        IsBranchPresent=$(git worktree list | grep '\[${branch_name}\]')
+    if [ $# -eq 1 ]; then
+        IsBranchPresent=$(git worktree list | grep "\[${branch_name}\]")
     else
-        IsBranchPresent=$(git worktree list | grep '\[${branch_name}_${2}\]')
+        IsBranchPresent=$(git worktree list | grep "\[${branch_name}_${2}\]")
     fi
     if [ ! -z "${IsBranchPresent}" ]; then
         EXIT_VALUE=1
@@ -189,13 +189,13 @@ else
             PG_DEV_SRC=${GIT_DIR}/${PG_DEV_NAME}
         fi
         PG_DEV_INST=${GIT_DIR}/${PG_INST_NAME}
-        if [ ! -d ${PG_DEV_SRC} ] || [ ! -d ${PG_DEV_INST_DIR} ]; then
+        if [ ! -d "${PG_DEV_SRC}" ] || [ ! -d "${PG_DEV_INST}" ]; then
             echo "Missing source worktree/clone in ${PG_DEV_SRC} or ${PG_DEV_INST}"
             echo "git worktree add --track -b <local branch> ../<local dir> origin/<Branch/TAG>\ngit clone ...\n\n"
             echo "git worktree add --track -b REL_${PGV}_STABLE ../${PG_DEV_NAME} origin/REL_${PGV}_STABLE"
             echo "mkdir -p ${PG_DEV_INST}"
         else
-            if [ -f ${PG_DEV_SRC}/meson.build ]; then
+            if [ -f "${PG_DEV_SRC}/meson.build" ]; then
                 [ -z "$SKIP_MESON_BUILD" ] && export MESON_BUILD_PRESENT=1
             fi
             export PG_ENV_VENV=1
@@ -218,48 +218,140 @@ else
             else
                 export PGPORT=5432
             fi
-        fi
         help() {
-            echo "******************"
-            echo "pg-env - Help"
-            echo "******************"
-            echo "distclean - run distclean"
-            echo "compile - setup build env, compile and install"
-            echo "compile_contrib - compile contrib and install"
-            echo "docs - generate docs"
-            echo "startdb - start database(s)"
-            echo "stopdb - stop database(s)"
-            echo "restartdb - stop and start database(s)"
-            echo "cleandb - stop and clean database(s)"
-            echo "cleaninst - clean PG install"
-            echo "cleanall - clean database(s) and PG install"
-            echo "setupdb - initdb database(s)"
-            echo "resetdb - stop, resetdb, and start database(s)"
-            echo "resetinst - clean up PG install"
-            echo "resetall - resetinst and cleandb"
-            echo "c - make check"
-            echo "cw - make check-world"
-            echo "ic - make installcheck"
-            echo "icw - make installcheck-world"
-            echo "deactivate - deactivate pg-env"
-        }
-        distclean() {
-            if [ -z ${MESON_BUILD_PRESENT} ]; then
-                pushd ${PG_DEV_SRC}
-                make -j clean
-                make -j distclean
+            local build_sys="autoconf (make)"
+            [ -n "${MESON_BUILD_PRESENT}" ] && build_sys="meson (ninja)"
+            echo "pg-env - PostgreSQL Development Environment (PGV=${PGV}, ${build_sys})"
+            echo "========================================================="
+            echo ""
+            echo "INFO"
+            echo "  penv              Show current pg-env variables"
+            echo "  status            Show running PostgreSQL instances and ports"
+            echo "  pglog [N]         Tail the latest log (node N, or default instance)"
+            echo ""
+            echo "BUILD (using ${build_sys})"
+            echo "  configure         Run ./configure or meson setup (with version-specific flags)"
+            echo "  compile           Build PostgreSQL"
+            echo "  install           Install PostgreSQL to \$PG_DEV_INST"
+            echo "  compile_contrib   Build and install contrib modules (autoconf only)"
+            echo "  distclean         Stop all, clean data/install, and distclean source tree"
+            echo "  docs              Generate documentation"
+            echo ""
+            echo "DATABASE LIFECYCLE"
+            echo "  setupdb [N ...]   Initialize database(s) with initdb"
+            echo "  startdb [N ...]   Start database instance(s)"
+            echo "  stopdb [N ...]    Stop database instance(s)"
+            echo "  restartdb [N ...] Stop and start database instance(s)"
+            echo "                    (no args = default instance, N = node number)"
+            echo ""
+            echo "CLEANUP & RESET"
+            echo "  cleandb [N ...]   Stop and remove database data dir(s)"
+            echo "  cleaninst         Remove PG install directory"
+            echo "  cleanall [N ...]  cleandb + cleaninst"
+            echo "  resetdb [N ...]   cleandb + setupdb + startdb"
+            echo "  resetinst         distclean + configure + compile + install + compile_contrib"
+            echo "  resetall [N ...]  resetinst + resetdb"
+            echo ""
+            echo "QUERY & TEST"
+            echo "  pexec [N ...] [PEXEC_CMD=\"...\"]"
+            echo "                    Run psql on default or specified nodes"
+            echo "                    e.g. pexec 1 2 3 PEXEC_CMD=\"-c 'SELECT 1'\""
+            if [ -z "${MESON_BUILD_PRESENT}" ]; then
+            echo "  c                 make check (core regression tests)"
+            echo "  cw                make check-world (all tests)"
+            echo "  ic                make installcheck (against running instance)"
+            echo "  icw               make installcheck-world (against running instance)"
             else
-                pushd ${PG_DEV_SRC}/build
-                ninja clean
+            echo "  c                 meson test --suite setup --suite regress"
+            echo "  cw                meson test (all suites)"
+            echo "  ic                meson test --setup running --suite regress-running"
+            echo "  icw               meson test --setup running (all suites)"
             fi
-            popd
+            echo "  r <test> [...]    Run specific SQL regression test(s)"
+            echo "                    e.g. r int4 int8"
+            echo "  t <test.pl> [...]  Run specific TAP/Perl test(s)"
+            echo "                    e.g. t src/test/recovery/t/001_stream_rep.pl"
+            echo "                    e.g. t t/001_stream_rep.pl  (from test directory)"
+            echo ""
+            echo "EXIT"
+            echo "  deactivate        Stop all instances and deactivate pg-env"
+            echo ""
+            echo "CONFIGURATION (set in ~/.pg-env or .pg-env):"
+            echo "  PGV                          PostgreSQL version (e.g. 18, HEAD)"
+            echo "  PG_DEV_NAME                  Source directory name"
+            echo "  PG_INST_NAME                 Install directory name"
+            echo "  PG_ENV_CFLAGS                Extra CFLAGS for builds"
+            echo "  PG_ENV_CONFIGURE_FLAGS       Extra ./configure flags (all versions)"
+            echo "  PG_ENV_CONFIGURE_FLAGS_<V>   Version-specific ./configure flags"
+            echo "  PG_ENV_MESON_FLAGS           Extra meson setup flags (all versions)"
+            echo "  PG_ENV_MESON_FLAGS_<V>       Version-specific meson setup flags"
+            echo "  SKIP_MESON_BUILD             Set to force autoconf even if meson.build exists"
         }
 
-        compile() {
-            pushd ${PG_DEV_SRC}
-            if [ -z ${MESON_BUILD_PRESENT} ]; then
+        penv() {
+            echo "PGV:              ${PGV}"
+            echo "PG_DEV_SRC:       ${PG_DEV_SRC}"
+            echo "PG_DEV_INST:      ${PG_DEV_INST}"
+            echo "PGDATA:           ${PGDATA}"
+            echo "PGPORT:           ${PGPORT}"
+            echo "PGDATABASE:       ${PGDATABASE}"
+            echo "PG_BIN:           ${PG_BIN}"
+            echo "LD_LIBRARY_PATH:  ${LD_LIBRARY_PATH}"
+            echo "MESON_BUILD:      ${MESON_BUILD_PRESENT:-no}"
+            echo "EXTRA CFLAGS:     ${PG_ENV_CFLAGS}"
+        }
+
+        status() {
+            echo "=== PostgreSQL instances ==="
+            if [ -d "${PGDATA}" ] && [ -f "${PGDATA}/postmaster.pid" ]; then
+                local pid=$(head -1 "${PGDATA}/postmaster.pid")
+                echo "  default  port=${PGPORT}  pid=${pid}  data=${PGDATA}"
+            else
+                echo "  default  port=${PGPORT}  STOPPED  data=${PGDATA}"
+            fi
+            for NodeN in 1 2 3 4 5; do
+                if [ -d "${PGDATA}-${NodeN}" ]; then
+                    if [ -f "${PGDATA}-${NodeN}/postmaster.pid" ]; then
+                        local pid=$(head -1 "${PGDATA}-${NodeN}/postmaster.pid")
+                        echo "  node-${NodeN}   port=${NodeN}${PGPORT}  pid=${pid}  data=${PGDATA}-${NodeN}"
+                    else
+                        echo "  node-${NodeN}   port=${NodeN}${PGPORT}  STOPPED  data=${PGDATA}-${NodeN}"
+                    fi
+                fi
+            done
+        }
+
+        pglog() {
+            local logdir
+            local node="${1}"
+            if [ -z "${node}" ]; then
+                logdir="${PGDATA}/log"
+            else
+                logdir="${PGDATA}-${node}/log"
+            fi
+            if [ ! -d "${logdir}" ]; then
+                echo "No log directory at ${logdir}"
+                return 1
+            fi
+            local latest=$(ls -t "${logdir}"/*.log 2>/dev/null | head -1)
+            if [ -z "${latest}" ]; then
+                echo "No log files in ${logdir}"
+                return 1
+            fi
+            echo "Tailing ${latest} (Ctrl-C to stop)"
+            tail -f "${latest}"
+        }
+
+        configure() {
+            # Version-specific flags: PG_ENV_CONFIGURE_FLAGS_<VER> > PG_ENV_CONFIGURE_FLAGS
+            local ver_upper=$(echo "${PGV}" | tr '[:lower:]' '[:upper:]')
+            local extra_configure extra_meson
+            eval "extra_configure=\${PG_ENV_CONFIGURE_FLAGS_${ver_upper}:-\$PG_ENV_CONFIGURE_FLAGS}"
+            eval "extra_meson=\${PG_ENV_MESON_FLAGS_${ver_upper}:-\$PG_ENV_MESON_FLAGS}"
+
+            pushd "${PG_DEV_SRC}" >/dev/null
+            if [ -z "${MESON_BUILD_PRESENT}" ]; then
                 (
-                        # --enable-injection-points \
                     time ./configure \
                         --prefix=${PG_DEV_INST} \
                         --with-pgport=${PGPORT} \
@@ -272,8 +364,10 @@ else
                         --with-systemd \
                         --with-lz4 \
                         --with-zstd \
+                        ${extra_configure} \
                         CFLAGS="-ggdb -O0 -g3 -ggdb3 -fno-omit-frame-pointer ${PG_ENV_CFLAGS}"
-                ) |& tee /tmp/pg_compile.log
+                ) |& tee /tmp/pg_configure.log
+                local setup_rc=${PIPESTATUS[0]}
             else
                 (
                     time meson setup build \
@@ -290,71 +384,130 @@ else
                         -Dtap_tests=enabled \
                         -Dlz4=enabled \
                         -Dzstd=enabled \
+                        ${extra_meson} \
                         -Dc_args="-ggdb -O0 -g3 -ggdb3 -fno-omit-frame-pointer ${PG_ENV_CFLAGS}"
-                ) |& tee /tmp/pg_compile.log
+                ) |& tee /tmp/pg_configure.log
+                local setup_rc=${PIPESTATUS[0]}
             fi
-            if [ $? -gt 0 ]; then
-                if [ -z ${MESON_BUILD_PRESENT} ]; then
+            popd >/dev/null
+            if [ $setup_rc -gt 0 ]; then
+                if [ -z "${MESON_BUILD_PRESENT}" ]; then
                     echo "Configure failed"
                 else
                     echo "meson setup failed"
                 fi
-            else
-                if [ -z ${MESON_BUILD_PRESENT} ]; then
-                        time make -j clean |& tee -a /tmp/pg_compile.log
-                        time make -j install |& tee -a /tmp/pg_compile.log
-                else
-                    (
-                        cd build
-                        time ninja clean
-                        time ninja -v install
-                    ) |& tee -a /tmp/pg_compile.log
-                fi
-                if [ $? -gt 0 ]; then
-                    echo "make install failed"
-                fi
+                return 1
             fi
-            popd
+        }
+
+        compile() {
+            pushd "${PG_DEV_SRC}" >/dev/null
+            if [ -z "${MESON_BUILD_PRESENT}" ]; then
+                time make -j |& tee /tmp/pg_compile.log
+                local build_rc=${PIPESTATUS[0]}
+            else
+                (
+                    cd build
+                    time ninja -v
+                ) |& tee /tmp/pg_compile.log
+                local build_rc=${PIPESTATUS[0]}
+            fi
+            popd >/dev/null
+            if [ $build_rc -gt 0 ]; then
+                echo "Compile failed"
+                return 1
+            fi
+        }
+
+        install() {
+            pushd "${PG_DEV_SRC}" >/dev/null
+            if [ -z "${MESON_BUILD_PRESENT}" ]; then
+                time make -j install |& tee /tmp/pg_install.log
+                local install_rc=${PIPESTATUS[0]}
+            else
+                (
+                    cd build
+                    time ninja install
+                ) |& tee /tmp/pg_install.log
+                local install_rc=${PIPESTATUS[0]}
+            fi
+            popd >/dev/null
+            if [ $install_rc -gt 0 ]; then
+                echo "Install failed"
+                return 1
+            fi
         }
 
         compile_contrib() {
-            if [ -z ${MESON_BUILD_PRESENT} ]; then
-                pushd ${PG_DEV_SRC}/contrib
+            if [ -z "${MESON_BUILD_PRESENT}" ]; then
+                pushd "${PG_DEV_SRC}/contrib" >/dev/null
                 (time make -j install) |& tee -a /tmp/pg_compile.log
-                if [ $? -gt 0 ]; then
+                if [ ${PIPESTATUS[0]} -gt 0 ]; then
                     echo "make install failed"
                 fi
-                popd
+                popd >/dev/null
             fi
         }
 
+        distclean() {
+            cleanall
+            if [ -z "${MESON_BUILD_PRESENT}" ]; then
+                pushd "${PG_DEV_SRC}" >/dev/null
+                make -j clean
+                make -j distclean
+            else
+                pushd "${PG_DEV_SRC}/build" >/dev/null
+                ninja clean
+            fi
+            popd >/dev/null
+        }
+
         docs() {
-            if [ -z ${MESON_BUILD_PRESENT} ]; then
-                pushd ${PG_DEV_SRC}
+            if [ -z "${MESON_BUILD_PRESENT}" ]; then
+                pushd "${PG_DEV_SRC}" >/dev/null
                 (time make -j docs) |& tee -a /tmp/pg_docs.log
             else
-                pushd ${PG_DEV_SRC}/build
+                pushd "${PG_DEV_SRC}/build" >/dev/null
                 ninja docs |& tee -a /tmp/pg_docs.log
             fi
-            popd
+            popd >/dev/null
+        }
+
+        setupdb() {
+            if [ -z "$1" ]; then
+                initdb --data-checksums --username=${USER}
+                echo "include = '${GIT_DIR}/pgconfigs/pg${PGV}.conf'" >>"${PGDATA}/postgresql.conf"
+                if [ -f "$(pwd)/.pg${PGV}.conf" ]; then
+                    echo "include = '$(pwd)/.pg${PGV}.conf'" >>"${PGDATA}/postgresql.conf"
+                fi
+            else
+                for NodeN in "$@"; do
+                    initdb --data-checksums --username=${USER} -D "${PGDATA}-${NodeN}"
+                    echo "include = '${GIT_DIR}/pgconfigs/pg${PGV}-${NodeN}.conf'" >>"${PGDATA}-${NodeN}/postgresql.conf"
+                    if [ -f "$(pwd)/.pg${PGV}-${NodeN}.conf" ]; then
+                        echo "include = '$(pwd)/.pg${PGV}-${NodeN}.conf'" >>"${PGDATA}-${NodeN}/postgresql.conf"
+                    fi
+                done
+            fi
         }
 
         startdb() {
             if [ -z "$1" ]; then
                 [ -d "${PGDATA}" ] && pg_ctl start
             else
-                for NodeN in $@; do
+                for NodeN in "$@"; do
                     echo "Starting pg_ctl start -D ${PGDATA}-${NodeN}"
-                    [ -d "${PGDATA}-${NodeN}" ] && pg_ctl start -D ${PGDATA}-${NodeN}
+                    [ -d "${PGDATA}-${NodeN}" ] && pg_ctl start -D "${PGDATA}-${NodeN}"
                 done
             fi
         }
+
         stopdb() {
             if [ -z "$1" ]; then
                 [ -d "${PGDATA}" ] && pg_ctl stop
             else
-                for NodeN in $@; do
-                    [ -d "${PGDATA}-${NodeN}" ] && pg_ctl stop -D ${PGDATA}-${NodeN}
+                for NodeN in "$@"; do
+                    [ -d "${PGDATA}-${NodeN}" ] && pg_ctl stop -D "${PGDATA}-${NodeN}"
                 done
             fi
         }
@@ -368,67 +521,23 @@ else
             stopdb "$@"
             if [ -z "$1" ]; then
                 [ -n "$ZSH_VERSION" ] && setopt localoptions rmstarsilent
-                rm -rf $PGDATA/*
+                rm -rf "${PGDATA:?PGDATA is not set}"/*
             else
-                for NodeN in $@; do
+                for NodeN in "$@"; do
                     [ -n "$ZSH_VERSION" ] && setopt localoptions rmstarsilent
-                    rm -rf ${PGDATA}-${NodeN}/*
+                    rm -rf "${PGDATA:?PGDATA is not set}-${NodeN}"/*
                 done
             fi
         }
+
         cleaninst() {
             [ -n "$ZSH_VERSION" ] && setopt localoptions rmstarsilent
-            rm -rf $PG_DEV_INST/*
+            rm -rf "${PG_DEV_INST:?PG_DEV_INST is not set}"/*
         }
+
         cleanall() {
             cleandb "$@"
             cleaninst "$@"
-        }
-
-        ### TODO ###
-        pexec() {
-            args=""
-            while [ $# -gt 0 ]; do
-                case "$1" in
-                --PEXEC_CMD=* | PEXEC_CMD=*)
-                    PEXEC_CMD=${1#*=}
-                    ;;
-                *)
-                    args="$args $1"
-                    ;;
-                esac
-                shift
-            done
-            set -- "$@" "$args"
-            if [ -z "$1" ]; then
-                echo psql -U ${USER} ${PEXEC_CMD}
-                psql -U ${USER} ${PEXEC_CMD}
-            else
-                for NodeN in $@; do
-                    cmd="psql -U ${USER} -p ${NodeN}${PGPORT} ${PEXEC_CMD}"
-                    echo $cmd
-                    $cmd
-                done
-            fi
-
-        }
-
-        setupdb() {
-            if [ -z "$1" ]; then
-                initdb --data-checksums --username=${USER}
-                echo "include = '${GIT_DIR}/pgconfigs/pg${PGV}.conf'" >>${PGDATA}/postgresql.conf
-                if [ -f "$(pwd)/.pg${PGV}.conf" ]; then
-                    echo "include = '$(pwd)/.pg${PGV}.conf'" >>${PGDATA}/postgresql.conf
-                fi
-            else
-                for NodeN in $@; do
-                    initdb --data-checksums --username=${USER} -D ${PGDATA}-${NodeN}
-                    echo "include = '${GIT_DIR}/pgconfigs/pg${PGV}-${NodeN}.conf'" >>${PGDATA}-${NodeN}/postgresql.conf
-                    if [ -f "$(pwd)/.pg${PGV}-${NodeN}.conf" ]; then
-                        echo "include = '$(pwd)/.pg${PGV}-${NodeN}.conf'" >>${PGDATA}-${NodeN}/postgresql.conf
-                    fi
-                done
-            fi
         }
 
         resetdb() {
@@ -439,7 +548,7 @@ else
 
         resetinst() {
             distclean
-            compile
+            configure && compile && install
             compile_contrib
         }
 
@@ -448,48 +557,118 @@ else
             resetdb "$@"
         }
 
-        ic() {
-            if [ -z ${MESON_BUILD_PRESENT} ]; then
-                pushd ${PG_DEV_SRC}
-                make -j installcheck |& tee /tmp/pg_ic.log
+        pexec() {
+            local PEXEC_CMD=""
+            local nodes=()
+            while [ $# -gt 0 ]; do
+                case "$1" in
+                --PEXEC_CMD=* | PEXEC_CMD=*)
+                    PEXEC_CMD="${1#*=}"
+                    ;;
+                *)
+                    nodes+=("$1")
+                    ;;
+                esac
+                shift
+            done
+            if [ ${#nodes[@]} -eq 0 ]; then
+                echo "psql -U ${USER} ${PEXEC_CMD}"
+                psql -U "${USER}" ${PEXEC_CMD}
             else
-                pushd ${PG_DEV_SRC}/build
-                meson test -q --print-errorlogs --setup running --suite regress-running |& tee /tmp/pg_ic.log
+                for NodeN in "${nodes[@]}"; do
+                    echo "psql -U ${USER} -p ${NodeN}${PGPORT} ${PEXEC_CMD}"
+                    psql -U "${USER}" -p "${NodeN}${PGPORT}" ${PEXEC_CMD}
+                done
             fi
-            popd
-        }
-
-        icw() {
-            if [ -z ${MESON_BUILD_PRESENT} ]; then
-                pushd ${PG_DEV_SRC}
-                make -j installcheck-world |& tee /tmp/pg_icw.log
-            else
-                pushd ${PG_DEV_SRC}/build
-                meson test -q --print-errorlogs --setup running |& tee /tmp/pg_icw.log
-            fi
-            popd
         }
 
         c() {
-            if [ -z ${MESON_BUILD_PRESENT} ]; then
-                pushd ${PG_DEV_SRC}
+            if [ -z "${MESON_BUILD_PRESENT}" ]; then
+                pushd "${PG_DEV_SRC}" >/dev/null
                 make -j check |& tee /tmp/pg_c.log
             else
-                pushd ${PG_DEV_SRC}/build
-                    meson test -q --print-errorlogs --suite setup --suite regress |& tee /tmp/pg_c.log
+                pushd "${PG_DEV_SRC}/build" >/dev/null
+                meson test -q --print-errorlogs --suite setup --suite regress |& tee /tmp/pg_c.log
             fi
-            popd
+            popd >/dev/null
         }
 
         cw() {
-            if [ -z ${MESON_BUILD_PRESENT} ]; then
-                pushd ${PG_DEV_SRC}
+            if [ -z "${MESON_BUILD_PRESENT}" ]; then
+                pushd "${PG_DEV_SRC}" >/dev/null
                 make -j check-world |& tee /tmp/pg_cw.log
             else
-                pushd ${PG_DEV_SRC}/build
+                pushd "${PG_DEV_SRC}/build" >/dev/null
                 meson test -q --print-errorlogs |& tee /tmp/pg_cw.log
             fi
-            popd
+            popd >/dev/null
+        }
+
+        ic() {
+            if [ -z "${MESON_BUILD_PRESENT}" ]; then
+                pushd "${PG_DEV_SRC}" >/dev/null
+                make -j installcheck |& tee /tmp/pg_ic.log
+            else
+                pushd "${PG_DEV_SRC}/build" >/dev/null
+                meson test -q --print-errorlogs --setup running --suite regress-running |& tee /tmp/pg_ic.log
+            fi
+            popd >/dev/null
+        }
+
+        icw() {
+            if [ -z "${MESON_BUILD_PRESENT}" ]; then
+                pushd "${PG_DEV_SRC}" >/dev/null
+                make -j installcheck-world |& tee /tmp/pg_icw.log
+            else
+                pushd "${PG_DEV_SRC}/build" >/dev/null
+                meson test -q --print-errorlogs --setup running |& tee /tmp/pg_icw.log
+            fi
+            popd >/dev/null
+        }
+
+        r() {
+            if [ -z "$1" ]; then
+                echo "Usage: r <test_name> [test_name ...]"
+                echo "  e.g. r int4 int8"
+                echo "  e.g. r src/test/regress/sql/int4.sql"
+                return 1
+            fi
+            local tests=()
+            for arg in "$@"; do
+                tests+=($(basename "${arg}" .sql))
+            done
+            if [ -z "${MESON_BUILD_PRESENT}" ]; then
+                pushd "${PG_DEV_SRC}/src/test/regress" >/dev/null
+                ${PG_BIN}/pg_regress --inputdir=. --bindir="${PG_BIN}" --dlpath=. --schedule=<(printf '%s\n' "test: ${tests[*]}") |& tee /tmp/pg_r.log
+            else
+                pushd "${PG_DEV_SRC}/build" >/dev/null
+                meson test -q --print-errorlogs ${tests[@]/#/regress-} |& tee /tmp/pg_r.log
+            fi
+            popd >/dev/null
+        }
+
+        t() {
+            if [ -z "$1" ]; then
+                echo "Usage: t <test.pl> [test.pl ...]"
+                echo "  e.g. t src/test/recovery/t/001_stream_rep.pl"
+                echo "  e.g. t t/001_stream_rep.pl  (from CWD)"
+                return 1
+            fi
+            for tp in "$@"; do
+                local tap_dir
+                if [[ "${tp}" = /* ]]; then
+                    tap_dir=$(dirname "${tp}")
+                elif [[ "${tp}" = t/* ]]; then
+                    tap_dir=$(pwd)
+                else
+                    tap_dir="${PG_DEV_SRC}/$(dirname "${tp}")"
+                fi
+                local tap_file=$(basename "${tp}")
+                echo "Running TAP test: ${tap_dir}/t/${tap_file}"
+                pushd "${tap_dir}" >/dev/null
+                prove -v "t/${tap_file}" |& tee /tmp/pg_t.log
+                popd >/dev/null
+            done
         }
 
         deactivate() {
@@ -527,43 +706,53 @@ else
             else
                 unset PGV
             fi
-            unset -f distclean
-            unset -f compile
-            unset -f compile_contrib
-            unset -f startdb
-            unset -f stopdb
-            unset -f restartdb
+            unset -f c
+            unset -f cleanall
             unset -f cleandb
             unset -f cleaninst
-            unset -f cleanall
-            unset -f setupdb
-            unset -f resetdb
-            unset -f resetinst
-            unset -f resetall
-            unset -f ic
-            unset -f icw
-            unset -f c
+            unset -f compile
+            unset -f compile_contrib
+            unset -f configure
+            unset -f install
             unset -f cw
             unset -f deactivate
+            unset -f distclean
+            unset -f docs
+            unset -f help
+            unset -f ic
+            unset -f icw
+            unset -f penv
             unset -f pexec
-            unset MESON_BUILD_PRESENT
-            unset PG_INST_NAME
-            unset PG_DEV_SRC
-            unset PG_DEV_INST
-            unset PG_BIN
-            unset SAVED_LD_LIBRARY_PATH
-            unset SAVED_PGDATA
-            unset SAVED_PGPORT
-            unset SAVED_PGDATABASE
-            unset SAVED_PATH
-            unset SAVED_PS1
-            unset SAVED_VIRTUAL_ENV
-            unset PG_ENV_VENV
-            unset SAVED_PGV
-            unset PG_DEV_NAME
+            unset -f pglog
+            unset -f resetall
+            unset -f resetdb
+            unset -f resetinst
+            unset -f restartdb
+            unset -f setupdb
+            unset -f startdb
+            unset -f status
+            unset -f stopdb
+            unset -f r
+            unset -f t
             unset GIT_DIR
+            unset MESON_BUILD_PRESENT
+            unset PG_BIN
+            unset PG_DEV_INST
+            unset PG_DEV_NAME
+            unset PG_DEV_SRC
+            unset PG_ENV_VENV
+            unset PG_INST_NAME
+            unset SAVED_LD_LIBRARY_PATH
+            unset SAVED_PATH
+            unset SAVED_PGDATA
+            unset SAVED_PGDATABASE
+            unset SAVED_PGPORT
+            unset SAVED_PS1
+            unset SAVED_PGV
+            unset SAVED_VIRTUAL_ENV
             unset SKIP_MESON_BUILD
         }
+        fi
     else
         echo "Already in pg-env VENV"
     fi

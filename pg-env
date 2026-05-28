@@ -231,9 +231,8 @@ else
             echo ""
             echo "BUILD (using ${build_sys})"
             echo "  configure         Run ./configure or meson setup (with version-specific flags)"
-            echo "  compile           Build PostgreSQL"
-            echo "  install           Install PostgreSQL to \$PG_DEV_INST"
-            echo "  compile_contrib   Build and install contrib modules (autoconf only)"
+            echo "  compile           Build PostgreSQL (includes contrib)"
+            echo "  install           Install PostgreSQL to \$PG_DEV_INST (includes contrib)"
             echo "  distclean         Stop all, clean data/install, and distclean source tree"
             echo "  docs              Generate documentation"
             echo ""
@@ -249,7 +248,7 @@ else
             echo "  cleaninst         Remove PG install directory"
             echo "  cleanall [N ...]  cleandb + cleaninst"
             echo "  resetdb [N ...]   cleandb + setupdb + startdb"
-            echo "  resetinst         distclean + configure + compile + install + compile_contrib"
+            echo "  resetinst         distclean + configure + compile + install"
             echo "  resetall [N ...]  resetinst + resetdb"
             echo ""
             echo "QUERY & TEST"
@@ -427,18 +426,31 @@ else
             if [ -z "${MESON_BUILD_PRESENT}" ]; then
                 time make -j |& tee /tmp/pg_compile.log
                 local build_rc=${PIPESTATUS[0]}
+                if [ $build_rc -gt 0 ]; then
+                    popd >/dev/null
+                    echo "Compile failed"
+                    return 1
+                fi
+                time make -j -C contrib |& tee -a /tmp/pg_compile.log
+                local contrib_rc=${PIPESTATUS[0]}
+                if [ $contrib_rc -gt 0 ]; then
+                    popd >/dev/null
+                    echo "Compile contrib failed"
+                    return 1
+                fi
             else
                 (
                     cd build
                     time ninja -v
                 ) |& tee /tmp/pg_compile.log
                 local build_rc=${PIPESTATUS[0]}
+                if [ $build_rc -gt 0 ]; then
+                    popd >/dev/null
+                    echo "Compile failed"
+                    return 1
+                fi
             fi
             popd >/dev/null
-            if [ $build_rc -gt 0 ]; then
-                echo "Compile failed"
-                return 1
-            fi
         }
 
         install() {
@@ -451,30 +463,33 @@ else
             if [ -z "${MESON_BUILD_PRESENT}" ]; then
                 time make -j install |& tee /tmp/pg_install.log
                 local install_rc=${PIPESTATUS[0]}
+                if [ $install_rc -gt 0 ]; then
+                    popd >/dev/null
+                    echo "Install failed"
+                    return 1
+                fi
+                time make -j -C contrib install |& tee -a /tmp/pg_install.log
+                local contrib_rc=${PIPESTATUS[0]}
+                if [ $contrib_rc -gt 0 ]; then
+                    popd >/dev/null
+                    echo "Install contrib failed"
+                    return 1
+                fi
             else
                 (
                     cd build
                     time ninja install
                 ) |& tee /tmp/pg_install.log
                 local install_rc=${PIPESTATUS[0]}
+                if [ $install_rc -gt 0 ]; then
+                    popd >/dev/null
+                    echo "Install failed"
+                    return 1
+                fi
             fi
             popd >/dev/null
-            if [ $install_rc -gt 0 ]; then
-                echo "Install failed"
-                return 1
-            fi
         }
 
-        compile_contrib() {
-            if [ -z "${MESON_BUILD_PRESENT}" ]; then
-                pushd "${PG_DEV_SRC}/contrib" >/dev/null
-                (time make -j install) |& tee -a /tmp/pg_compile.log
-                if [ ${PIPESTATUS[0]} -gt 0 ]; then
-                    echo "make install failed"
-                fi
-                popd >/dev/null
-            fi
-        }
 
         distclean() {
             cleanall
@@ -590,7 +605,6 @@ else
         resetinst() {
             distclean
             configure && compile && install
-            compile_contrib
         }
 
         resetall() {
@@ -753,7 +767,6 @@ else
             unset -f cleandb
             unset -f cleaninst
             unset -f compile
-            unset -f compile_contrib
             unset -f configure
             unset -f install
             unset -f cw

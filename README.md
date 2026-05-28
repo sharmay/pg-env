@@ -34,7 +34,6 @@ source ~/bin/pg-env
 
 # 3. Build and run
 configure && compile && install
-compile_contrib
 setupdb
 startdb
 psql
@@ -177,9 +176,8 @@ Commands adapt automatically to the detected build system (autoconf/make or meso
 | Command | Autoconf | Meson |
 |---------|----------|-------|
 | `configure` | `./configure ...` | `meson setup build ...` |
-| `compile` | `make -j` | `ninja` |
-| `install` | `make -j install` | `ninja install` |
-| `compile_contrib` | `make -j install` (in contrib/) | (included in main build) |
+| `compile` | `make -j` + `make -j -C contrib` | `ninja` |
+| `install` | `make -j install` + `make -j -C contrib install` | `ninja install` |
 | `distclean` | `make distclean` | `ninja clean` |
 | `docs` | `make docs` | `ninja docs` |
 
@@ -187,7 +185,7 @@ Typical workflows:
 
 ```bash
 # Full initial build
-configure && compile && install && compile_contrib
+configure && compile && install
 
 # Incremental rebuild after code changes
 compile && install
@@ -226,7 +224,7 @@ restartdb 1 3       # restart nodes 1 and 3
 | `cleaninst` | Remove install directory contents |
 | `cleanall [N ...]` | `cleandb` + `cleaninst` |
 | `resetdb [N ...]` | `cleandb` + `setupdb` + `startdb` |
-| `resetinst` | `distclean` + `configure` + `compile` + `install` + `compile_contrib` |
+| `resetinst` | `distclean` + `configure` + `compile` + `install` |
 | `resetall [N ...]` | `resetinst` + `resetdb` |
 
 ### Query and Test

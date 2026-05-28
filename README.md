@@ -265,11 +265,11 @@ pexec 2
 compile && install && ic
 ```
 
-### Exiting Virtual Environment
+### Deactivating Virtual Environment
 
 | Command | Description |
 |---------|-------------|
-| `deactivate` | Stop all instances (default + nodes 1-3) and restore original shell environment |
+| `deactivate` | Stop all instances (default + nodes 1-5) and restore original shell environment |
 
 ## Standalone Commands
 

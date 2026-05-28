@@ -273,7 +273,7 @@ else
             echo "                    e.g. t src/test/recovery/t/001_stream_rep.pl"
             echo "                    e.g. t t/001_stream_rep.pl  (from test directory)"
             echo ""
-            echo "EXIT"
+            echo "DEACTIVATING VIRTUAL ENVIRONMENT"
             echo "  deactivate        Stop all instances and deactivate pg-env"
             echo ""
             echo "CONFIGURATION (set in ~/.pg-env or .pg-env):"
@@ -286,6 +286,23 @@ else
             echo "  PG_ENV_MESON_FLAGS           Extra meson setup flags (all versions)"
             echo "  PG_ENV_MESON_FLAGS_<V>       Version-specific meson setup flags"
             echo "  SKIP_MESON_BUILD             Set to force autoconf even if meson.build exists"
+            echo ""
+            echo "POSTGRESQL CONFIGURATION FILES (included by setupdb):"
+            echo "  \${GIT_DIR}/pgconfigs/pg\${PGV}.conf       Global config for default instance"
+            echo "  \${GIT_DIR}/pgconfigs/pg\${PGV}-N.conf     Global config for node N"
+            echo "  ./.\pg\${PGV}.conf                         Local overlay for default instance"
+            echo "  ./.pg\${PGV}-N.conf                        Local overlay for node N"
+        }
+
+        _validate_nodes() {
+            local _rc=0
+            for _n in "$@"; do
+                if ! [[ "$_n" =~ ^[1-5]$ ]]; then
+                    echo "ERROR: Invalid node number '${_n}' (must be 1-5)"
+                    _rc=1
+                fi
+            done
+            return $_rc
         }
 
         penv() {
@@ -303,25 +320,25 @@ else
 
         status() {
             echo "=== PostgreSQL instances ==="
-            if [ -d "${PGDATA}" ] && [ -f "${PGDATA}/postmaster.pid" ]; then
-                local pid=$(head -1 "${PGDATA}/postmaster.pid")
-                echo "  default  port=${PGPORT}  pid=${pid}  data=${PGDATA}"
-            else
+            if pg_isready -q -p ${PGPORT}; then
+                local pid=$(head -1 "${PGDATA}/postmaster.pid" 2>/dev/null)
+                echo "  default  port=${PGPORT}  pid=${pid:-?}  RUNNING  data=${PGDATA}"
+            elif [ -d "${PGDATA}" ]; then
                 echo "  default  port=${PGPORT}  STOPPED  data=${PGDATA}"
             fi
+            local NodeN
             for NodeN in 1 2 3 4 5; do
-                if [ -d "${PGDATA}-${NodeN}" ]; then
-                    if [ -f "${PGDATA}-${NodeN}/postmaster.pid" ]; then
-                        local pid=$(head -1 "${PGDATA}-${NodeN}/postmaster.pid")
-                        echo "  node-${NodeN}   port=${NodeN}${PGPORT}  pid=${pid}  data=${PGDATA}-${NodeN}"
-                    else
-                        echo "  node-${NodeN}   port=${NodeN}${PGPORT}  STOPPED  data=${PGDATA}-${NodeN}"
-                    fi
+                if pg_isready -q -p "${NodeN}${PGPORT}"; then
+                    local pid=$(head -1 "${PGDATA}-${NodeN}/postmaster.pid" 2>/dev/null)
+                    echo "  node-${NodeN}   port=${NodeN}${PGPORT}  pid=${pid:-?}  RUNNING  data=${PGDATA}-${NodeN}"
+                elif [ -d "${PGDATA}-${NodeN}" ]; then
+                    echo "  node-${NodeN}   port=${NodeN}${PGPORT}  STOPPED  data=${PGDATA}-${NodeN}"
                 fi
             done
         }
 
         pglog() {
+            [ $# -gt 0 ] && { _validate_nodes "$@" || return 1; }
             local logdir
             local node="${1}"
             if [ -z "${node}" ]; then
@@ -401,6 +418,11 @@ else
         }
 
         compile() {
+            if [ -z "${MESON_BUILD_PRESENT}" ]; then
+                [ ! -f "${PG_DEV_SRC}/config.status" ] && { configure || return 1; }
+            else
+                [ ! -f "${PG_DEV_SRC}/build/build.ninja" ] && { configure || return 1; }
+            fi
             pushd "${PG_DEV_SRC}" >/dev/null
             if [ -z "${MESON_BUILD_PRESENT}" ]; then
                 time make -j |& tee /tmp/pg_compile.log
@@ -420,6 +442,11 @@ else
         }
 
         install() {
+            if [ -z "${MESON_BUILD_PRESENT}" ]; then
+                [ ! -f "${PG_DEV_SRC}/src/backend/postgres" ] && { compile || return 1; }
+            else
+                [ ! -f "${PG_DEV_SRC}/build/src/backend/postgres" ] && { compile || return 1; }
+            fi
             pushd "${PG_DEV_SRC}" >/dev/null
             if [ -z "${MESON_BUILD_PRESENT}" ]; then
                 time make -j install |& tee /tmp/pg_install.log
@@ -474,6 +501,8 @@ else
         }
 
         setupdb() {
+            [ ! -f "${PG_BIN}/postgres" ] && { install || return 1; }
+            [ $# -gt 0 ] && { _validate_nodes "$@" || return 1; }
             if [ -z "$1" ]; then
                 initdb --data-checksums --username=${USER}
                 echo "include = '${GIT_DIR}/pgconfigs/pg${PGV}.conf'" >>"${PGDATA}/postgresql.conf"
@@ -492,32 +521,44 @@ else
         }
 
         startdb() {
+            [ $# -gt 0 ] && { _validate_nodes "$@" || return 1; }
             if [ -z "$1" ]; then
-                [ -d "${PGDATA}" ] && pg_ctl start
+                [ ! -f "${PGDATA}/PG_VERSION" ] && { setupdb || return 1; }
+                pg_isready -q -p ${PGPORT} || pg_ctl start
             else
                 for NodeN in "$@"; do
-                    echo "Starting pg_ctl start -D ${PGDATA}-${NodeN}"
-                    [ -d "${PGDATA}-${NodeN}" ] && pg_ctl start -D "${PGDATA}-${NodeN}"
+                    [ ! -f "${PGDATA}-${NodeN}/PG_VERSION" ] && { setupdb "${NodeN}" || return 1; }
+                    pg_isready -q -p "${NodeN}${PGPORT}" || pg_ctl start -D "${PGDATA}-${NodeN}"
                 done
             fi
         }
 
         stopdb() {
+            [ $# -gt 0 ] && { _validate_nodes "$@" || return 1; }
             if [ -z "$1" ]; then
-                [ -d "${PGDATA}" ] && pg_ctl stop
+                pg_isready -q -p ${PGPORT} && pg_ctl stop
             else
                 for NodeN in "$@"; do
-                    [ -d "${PGDATA}-${NodeN}" ] && pg_ctl stop -D "${PGDATA}-${NodeN}"
+                    pg_isready -q -p "${NodeN}${PGPORT}" && pg_ctl stop -D "${PGDATA}-${NodeN}"
                 done
             fi
         }
 
         restartdb() {
+            [ $# -gt 0 ] && { _validate_nodes "$@" || return 1; }
             stopdb "$@"
+            if [ -z "$1" ]; then
+                [ ! -f "${PGDATA}/PG_VERSION" ] && { setupdb || return 1; }
+            else
+                for NodeN in "$@"; do
+                    [ ! -f "${PGDATA}-${NodeN}/PG_VERSION" ] && { setupdb "${NodeN}" || return 1; }
+                done
+            fi
             startdb "$@"
         }
 
         cleandb() {
+            [ $# -gt 0 ] && { _validate_nodes "$@" || return 1; }
             stopdb "$@"
             if [ -z "$1" ]; then
                 [ -n "$ZSH_VERSION" ] && setopt localoptions rmstarsilent
@@ -673,7 +714,7 @@ else
 
         deactivate() {
             stopdb
-            stopdb 1 2 3
+            stopdb 1 2 3 4 5
             export PATH=${SAVED_PATH}
             export PS1=${SAVED_PS1}
             if [ ! -z "$VIRTUAL_ENV" ]; then
@@ -706,6 +747,7 @@ else
             else
                 unset PGV
             fi
+            unset -f _validate_nodes
             unset -f c
             unset -f cleanall
             unset -f cleandb
